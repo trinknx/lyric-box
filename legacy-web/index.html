@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="vi" data-theme="clear">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lyric Box</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Be+Vietnam+Pro:wght@300;500;800;900&family=JetBrains+Mono:wght@500&family=Noto+Serif:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="ambient"></div>
+
+<main id="wrap">
+  <div id="box">
+    <div id="grill"></div>
+    <div class="driver tweeter"></div>
+    <div class="driver woofer"></div>
+    <div id="stage"></div>
+    <div id="glass"></div>
+  </div>
+  <p id="hint">Kéo thả file nhạc (và file <b>.lrc</b>) vào đây — hoặc bấm <button id="hintDemo" class="link">nghe thử Demo</button></p>
+</main>
+
+<div id="controls">
+  <button id="btnPlay" class="icon" title="Phát / Tạm dừng (Space)">
+    <svg class="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+    <svg class="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+  </button>
+  <div id="meta"><div id="mTitle">Lyric Box</div><div id="mArtist">Chưa có bài hát</div></div>
+  <span id="cur" class="time">0:00</span>
+  <input id="seek" type="range" min="0" max="1000" value="0" step="1">
+  <span id="dur" class="time">0:00</span>
+  <select id="styleSel" title="Kiểu chuyển động (S)">
+    <optgroup label="COTODAMA canvas">
+      <option value="auto">Tự động theo bài</option>
+      <option value="calm">Êm dịu</option>
+      <option value="mid">Vừa</option>
+      <option value="energetic">Sôi động</option>
+    </optgroup>
+    <optgroup label="Kiểu khác">
+    <option value="mix">Trộn 2 kiểu</option>
+    <option value="tour">Đổi mỗi dòng</option>
+    <option value="stack">Stack</option>
+    <option value="slide">Slide</option>
+    <option value="drift">Drift</option>
+    <option value="type">Type</option>
+    <option value="burst">Burst</option>
+    <option value="zoom">Zoom</option>
+    </optgroup>
+  </select>
+  <div id="offset" title="Lệch lời ( [ / ] )">
+    <button id="offMinus" class="icon sm">−</button><span id="offVal">0.0s</span><button id="offPlus" class="icon sm">+</button>
+  </div>
+  <button id="btnPanel" class="icon" title="Nạp nhạc / lời">
+    <svg viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h12v2H3zm0 5h18v2H3z"/></svg>
+  </button>
+ <button id="btnTheme" class="icon" title="Đổi giao diện Clear / Night (T)">
+    <svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36A5.5 5.5 0 0 1 13.36 3.1C12.92 3.04 12.46 3 12 3z"/></svg>
+  </button>
+  <button id="btnFs" class="icon" title="Toàn màn hình (F)">
+    <svg viewBox="0 0 24 24"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg>
+  </button>
+</div>
+
+<aside id="panel">
+  <header><h2>Nguồn phát</h2><button id="btnClose" class="icon sm">✕</button></header>
+
+  <section>
+    <h3>Spotify</h3>
+    <div id="spLogin" class="stack">
+      <p id="spHostNote" class="note" hidden>Spotify không chấp nhận <code>localhost</code> — hãy mở <a id="spHostLink" href="#">bản 127.0.0.1</a>.</p>
+      <input id="spClient" type="text" placeholder="Spotify Client ID" autocomplete="off" spellcheck="false">
+      <button id="btnSpLogin" class="sp">Kết nối Spotify</button>
+      <details>
+        <summary>Cách lấy Client ID (1 lần)</summary>
+        <ol>
+          <li>Vào <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> → <b>Create app</b></li>
+          <li>Redirect URI: <code id="spRedirect"></code></li>
+          <li>Tick <b>Web API</b> và <b>Web Playback SDK</b>, lưu lại</li>
+          <li>Copy <b>Client ID</b> dán vào ô trên</li>
+        </ol>
+      </details>
+    </div>
+    <div id="spConnected" class="stack" hidden>
+      <button id="btnSpFollow" class="sp">Theo dõi bài đang phát</button>
+      <button id="btnSpHere" class="ghost">Phát ngay trên trình duyệt (Premium)</button>
+      <p class="note">Phát nhạc trên app Spotify (điện thoại / máy tính) — lời sẽ tự hiện theo bài.</p>
+      <button id="btnSpLogout" class="link">Ngắt kết nối</button>
+    </div>
+  </section>
+
+  <section>
+    <h3>File nhạc</h3>
+    <label class="file">Chọn file nhạc<input id="fileAudio" type="file" accept="audio/*,video/*"></label>
+    <button id="btnDemo" class="ghost">Nghe Demo</button>
+  </section>
+
+  <section>
+    <h3>Lời bài hát</h3>
+    <label class="file">Chọn file .lrc / .txt<input id="fileLrc" type="file" accept=".lrc,.txt,text/plain"></label>
+    <textarea id="lrcText" rows="7" placeholder="[00:12.30]Dán lời dạng LRC vào đây&#10;[00:15.80]Hỗ trợ cả mốc từng chữ &lt;00:16.20&gt;"></textarea>
+    <button id="btnApply" class="ghost">Áp dụng lời</button>
+  </section>
+
+  <section>
+    <h3>Tìm lời đồng bộ (LRCLIB)</h3>
+    <div class="row"><input id="q" type="search" placeholder="Ca sĩ - Tên bài"><button id="btnSearch" class="ghost">Tìm</button></div>
+    <ul id="results"></ul>
+  </section>
+
+  <section class="keys">
+    <h3>Phím tắt</h3>
+    <p><kbd>Space</kbd> phát/dừng · <kbd>←</kbd><kbd>→</kbd> tua 5s · <kbd>[</kbd><kbd>]</kbd> lệch lời · <kbd>S</kbd> đổi kiểu · <kbd>T</kbd> giao diện · <kbd>F</kbd> toàn màn hình</p>
+  </section>
+</aside>
+
+<div id="drop"><div>Thả file nhạc / lời vào đây</div></div>
+<div id="toast"></div>
+<audio id="audio" preload="auto"></audio>
+<script src="app.js"></script>
+</body>
+</html>
