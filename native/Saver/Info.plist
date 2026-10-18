@@ -7,8 +7,8 @@
     <key>CFBundleIdentifier</key><string>io.bamboosoft.lyricbox.saver</string>
     <key>CFBundleExecutable</key><string>LyricBoxSaver</string>
     <key>CFBundlePackageType</key><string>BNDL</string>
-    <key>CFBundleShortVersionString</key><string>0.3.0</string>
-    <key>CFBundleVersion</key><string>3</string>
+    <key>CFBundleShortVersionString</key><string>0.4.0</string>
+    <key>CFBundleVersion</key><string>4</string>
     <key>NSPrincipalClass</key><string>LyricBoxSaverView</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
 </dict>

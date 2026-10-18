@@ -13,7 +13,7 @@ Viết bằng Swift + Core Animation: app 4.8 MB (dmg 2.9 MB, phần lớn là p
 
 ## Cài đặt
 
-Tải **[Lyric-Box-0.3.0.dmg](https://github.com/trinknx/lyric-box/releases/latest)** ở mục Releases.
+Tải **[Lyric-Box-0.4.0.dmg](https://github.com/trinknx/lyric-box/releases/latest)** ở mục Releases.
 
 1. Mở file `.dmg`, kéo **Lyric Box** vào **Applications**.
 2. Mở lần đầu: macOS sẽ chặn vì app chưa được Apple ký số. Vào **System Settings → Privacy & Security**, bấm **Open Anyway**. (Hoặc: `xattr -dr com.apple.quarantine "/Applications/Lyric Box.app"`)

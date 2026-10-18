@@ -13,7 +13,7 @@ Written in Swift + Core Animation: 4.8 MB app (2.9 MB dmg, mostly the bundled fo
 
 ## Install
 
-Download **[Lyric-Box-0.3.0.dmg](https://github.com/trinknx/lyric-box/releases/latest)** from Releases.
+Download **[Lyric-Box-0.4.0.dmg](https://github.com/trinknx/lyric-box/releases/latest)** from Releases.
 
 1. Open the `.dmg` and drag **Lyric Box** into **Applications**.
 2. First launch: macOS blocks it because the app isn't signed by Apple. Go to **System Settings → Privacy & Security** and click **Open Anyway**. (Or: `xattr -dr com.apple.quarantine "/Applications/Lyric Box.app"`)
