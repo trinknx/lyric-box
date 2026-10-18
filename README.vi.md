@@ -66,6 +66,7 @@ native/Sources/LyricBox/
   LRC.swift             đọc file LRC, ước lượng thời điểm từng chữ
   Scene.swift           nền, chọn dòng theo thời gian, poster, hiện/ẩn
   Flow.swift            canvas COTODAMA: bố cục khối chữ, camera, hiện từng chữ cái
+  Constellation.swift   kiểu chòm sao: ngôi sao, đường nối, trời sao lấp lánh
   Ambient.swift         4 kiểu đồ họa (vòng sóng, dải sóng, lưới chấm, tia sáng)
   HotKeys.swift         ⌥⌘[ / ⌥⌘]
 ```
@@ -73,7 +74,7 @@ native/Sources/LyricBox/
 ## Menu trên thanh menu
 
 - **Hiện lời trên màn hình nền**: bật/tắt
-- **Kiểu chữ**: COTODAMA tự động theo bài / êm dịu / vừa / sôi động
+- **Kiểu chữ**: COTODAMA tự động theo bài / êm dịu / vừa / sôi động / chòm sao
 - **Nền**: Tối · Sáng (acrylic trong) · Trong suốt chữ trắng · Trong suốt chữ đen (giữ hình nền của bạn)
 - **Màn hình**: màn hình chính, chọn màn hình, hoặc tất cả
 - **Lệch lời**: `⌥⌘]` lời sớm hơn · `⌥⌘[` lời trễ hơn (0.25s mỗi lần)
@@ -86,6 +87,7 @@ native/Sources/LyricBox/
 - **Canvas liên tục**: dòng cũ vẫn ở lại và mờ đi; camera lia, zoom, **xoay 90°** sang dòng mới.
 - Thỉnh thoảng hiện mờ chữ sắp hát, hoặc đặt cụm ngắn trong khung đảo màu.
 - Tâm trạng theo mật độ chữ: êm dịu (serif mảnh, chậm) · vừa · sôi động (in hoa đậm, nhanh).
+- **Chòm sao**: mỗi chữ là một ngôi sao. Các sao của dòng hiện mờ trước để thấy hình chòm sao; khi hát tới chữ nào, sao đó sáng lên, một đường mảnh nối từ sao trước, và chữ được gõ ra bên cạnh, trên nền trời sao lấp lánh. Chòm sao cũ thu nhỏ và trôi đi. Ở chế độ tự động, khoảng một nửa số bài êm dịu dùng kiểu này.
 - Bài không có lời: "poster" chữ từ tên bài → ca sĩ → album (đổi mỗi 8s) trên nền đồ họa động (vòng sóng, dải sóng, lưới chấm, tia sáng; mỗi bài một kiểu). Đoạn nhạc dạo giữa bài cũng hiện đồ họa này.
 
 Giới hạn: Spotify không cho truy cập luồng âm thanh, nên đồ họa không theo nhịp thật.

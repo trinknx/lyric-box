@@ -29,7 +29,7 @@ final class LyricScene {
     private enum Key: Equatable { case title, none, line(Int), meta(Int) }
     private var key: Key?
     private var jumped = true
-    private var flow: FlowCanvas?
+    private var canvas: LyricCanvas?
     private var current: (block: Block, line: Line, mood: Mood, shown: [Bool])?
     private var ambient: CALayer?
     private var ambientKind = ""
@@ -220,8 +220,8 @@ final class LyricScene {
         let wasJumped = jumped
         jumped = false
         if wasJumped {
-            flow?.remove()
-            flow = nil
+            canvas?.remove()
+            canvas = nil
         }
         current = nil
         key = k
@@ -235,15 +235,26 @@ final class LyricScene {
         case .line(let i): line = lines[i]; salt = UInt32(i)
         }
         guard let line, !line.words.isEmpty else {
-            flow?.fadeOut()
-            flow = nil
+            canvas?.fadeOut()
+            canvas = nil
             return
         }
-        if flow == nil { flow = FlowCanvas(in: stage, focus: CGPoint(x: size.width * 0.43, y: size.height / 2)) }
-        let mood = Mood.named(moodSetting == .auto ? autoMood : moodSetting.rawValue)
+        // constellation when chosen, and for half of the calm songs in automatic mode
+        let stars = moodSetting == .constellation
+            || (moodSetting == .auto && autoMood == "calm" && hashString(title) % 2 == 0)
+        if let c = canvas, (c is ConstellationCanvas) != stars {
+            c.fadeOut()
+            canvas = nil
+        }
+        if canvas == nil {
+            canvas = stars
+                ? ConstellationCanvas(in: stage, size: size, color: palette.fg.cgColor)
+                : FlowCanvas(in: stage, focus: CGPoint(x: size.width * 0.43, y: size.height / 2))
+        }
+        let mood = stars ? Mood.calm : Mood.named(moodSetting == .auto ? autoMood : moodSetting.rawValue)
         let style = FlowStyle(base: baseFont, palette: palette, backing: backing, fontSeed: hashString(title))
-        let block = flow!.add(line: line, seed: hashString(line.text) &+ salt, mood: mood, style: style,
-                              stageSize: size, instant: wasJumped)
+        let block = canvas!.add(line: line, seed: hashString(line.text) &+ salt, mood: mood, style: style,
+                                stageSize: size, instant: wasJumped)
         current = (block, line, mood, Array(repeating: false, count: line.words.count))
     }
 
@@ -255,6 +266,7 @@ final class LyricScene {
             changed = true
             let next = k + 1 < c.line.words.count ? c.line.words[k + 1].time : w.time + 0.6
             let span = max(0.12, min(next - w.time, 0.8)) * 0.8
+            c.block.onReveal?(k, t - w.time > 0.5)
             FlowCanvas.reveal(c.block.glyphs[k], size: c.block.sizes[k], span: span, mood: c.mood,
                               ghost: c.block.ghost, instant: t - w.time > 0.5)
         }

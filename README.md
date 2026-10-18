@@ -66,6 +66,7 @@ native/Sources/LyricBox/
   LRC.swift             parses LRC files, estimates per-word timing
   Scene.swift           background, picks the line for the current time, poster, fade in/out
   Flow.swift            COTODAMA canvas: block layout, camera, letter-by-letter reveal
+  Constellation.swift   constellation style: stars, connecting lines, twinkling sky
   Ambient.swift         4 graphics (rings, waves, dot grid, sunburst)
   HotKeys.swift         ⌥⌘[ / ⌥⌘]
 ```
@@ -75,7 +76,7 @@ native/Sources/LyricBox/
 The app's menus are in Vietnamese; the original labels are shown in brackets.
 
 - **Show lyrics on the desktop** (*Hiện lời trên màn hình nền*): on/off
-- **Text style** (*Kiểu chữ*): COTODAMA automatic per song / calm / medium / energetic
+- **Text style** (*Kiểu chữ*): COTODAMA automatic per song / calm / medium / energetic / constellation (*Chòm sao*)
 - **Background** (*Nền*): Dark · Light (clear acrylic) · Transparent with white text · Transparent with black text (keeps your own wallpaper)
 - **Screen** (*Màn hình*): main screen, a specific screen, or all screens
 - **Lyric offset** (*Lệch lời*): `⌥⌘]` earlier · `⌥⌘[` later (0.25 s per step)
@@ -88,6 +89,7 @@ The app's menus are in Vietnamese; the original labels are shown in brackets.
 - **Continuous canvas:** the previous line stays, dimmed; the camera pans, zooms and **turns 90°** to the new line.
 - Upcoming words sometimes appear faintly first, and short phrases sometimes sit in an inverted label box.
 - Mood from how fast the words come: calm (thin serif, slow) · medium · energetic (bold uppercase, fast).
+- **Constellation** (*Chòm sao*): every word is a star. The line's stars first show faintly so you see the shape; as each word is sung its star lights up, a thin line is drawn from the previous star, and the letters are spelled out beside it, over a twinkling sky. Older constellations shrink and drift away. In automatic mode about half of the calm songs use it.
 - Songs without lyrics: a typographic "poster" of title → artist → album (changing every 8 s) over moving graphics (rings, waves, dot grid, sunburst; one per song). Instrumental breaks in songs with lyrics show these graphics too.
 
 Limitation: Spotify doesn't expose its audio stream, so the graphics don't follow the actual beat.

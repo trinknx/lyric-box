@@ -54,7 +54,7 @@ enum Theme: String, CaseIterable {
 }
 
 enum MoodSetting: String, CaseIterable {
-    case auto, calm, mid, energetic
+    case auto, calm, mid, energetic, constellation
 
     var title: String {
         switch self {
@@ -62,6 +62,7 @@ enum MoodSetting: String, CaseIterable {
         case .calm: return "Êm dịu"
         case .mid: return "Vừa"
         case .energetic: return "Sôi động"
+        case .constellation: return "Chòm sao (nối chữ như sao)"
         }
     }
 }

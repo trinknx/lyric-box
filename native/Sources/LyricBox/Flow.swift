@@ -107,6 +107,7 @@ final class GlyphLayer: CALayer {
 
 final class Block {
     let layer = CALayer()
+    var onReveal: ((_ word: Int, _ instant: Bool) -> Void)?   // extra effect when a word starts
     var x: CGFloat = 0, y: CGFloat = 0, w: CGFloat = 0, h: CGFloat = 0, rot: CGFloat = 0
     var glyphs: [[GlyphLayer]] = []   // per word
     var sizes: [CGFloat] = []         // font size per word (pt)
@@ -139,7 +140,42 @@ func animate(_ layer: CALayer, _ keyPath: String, to value: Any, duration: Doubl
     layer.add(a, forKey: keyPath)
 }
 
-final class FlowCanvas {
+/// A lyric renderer the scene can switch between (flow canvas, constellation…).
+protocol LyricCanvas: AnyObject {
+    func add(line: Line, seed: UInt32, mood: Mood, style: FlowStyle, stageSize: CGSize, instant: Bool) -> Block
+    func remove()
+    func fadeOut()
+}
+
+/// One layer per letter of `text`, placed at the word's kerned positions.
+/// `origin` is where the word starts on its baseline.
+func makeGlyphs(_ text: String, attrs: [NSAttributedString.Key: Any], line: CTLine, at origin: CGPoint,
+                pad: CGFloat, scale: CGFloat, shadow: NSColor?, blur: CGFloat, opacity: Float) -> [GlyphLayer] {
+    var out: [GlyphLayer] = []
+    var u16 = 0
+    for ch in text {
+        let s = String(ch)
+        defer { u16 += s.utf16.count }
+        let ct = CTLineCreateWithAttributedString(NSAttributedString(string: s, attributes: attrs))
+        let gb = CTLineGetBoundsWithOptions(ct, .useGlyphPathBounds)
+        if gb.isEmpty || gb.width <= 0 { continue }
+        let off = CTLineGetOffsetForStringIndex(line, u16, nil)
+        let g = GlyphLayer()
+        g.ctLine = ct
+        g.contentsScale = scale
+        g.frame = CGRect(x: origin.x + off + gb.minX - pad, y: origin.y - gb.maxY - pad,
+                         width: gb.width + pad * 2, height: gb.height + pad * 2)
+        g.textOrigin = CGPoint(x: pad - gb.minX, y: pad - gb.minY)
+        g.shadowColor0 = shadow
+        g.shadowBlur0 = blur
+        g.opacity = opacity
+        g.setNeedsDisplay()
+        out.append(g)
+    }
+    return out
+}
+
+final class FlowCanvas: LyricCanvas {
     // camera = position → rotation → scale → world offset (separate layers so a 90°
     // turn interpolates as a real rotation instead of a squashed matrix)
     private let camPos = CALayer(), camRot = CALayer(), camScale = CALayer(), world = CALayer()
@@ -268,27 +304,11 @@ final class FlowCanvas {
             b.sizes = measured.map { $0.size }
             for p in placed {
                 let m = measured[p.k]
-                var u16 = 0
-                for ch in texts[p.k] {
-                    let s = String(ch)
-                    defer { u16 += s.utf16.count }
-                    let ct = CTLineCreateWithAttributedString(NSAttributedString(string: s, attributes: m.attrs))
-                    let gb = CTLineGetBoundsWithOptions(ct, .useGlyphPathBounds)
-                    if gb.isEmpty || gb.width <= 0 { continue }
-                    let off = CTLineGetOffsetForStringIndex(m.line, u16, nil)
-                    let g = GlyphLayer()
-                    g.ctLine = ct
-                    g.contentsScale = scale
-                    g.frame = CGRect(x: padX + p.x + off + gb.minX - pad, y: padT + p.baseline - gb.maxY - pad,
-                                     width: gb.width + pad * 2, height: gb.height + pad * 2)
-                    g.textOrigin = CGPoint(x: pad - gb.minX, y: pad - gb.minY)
-                    g.shadowColor0 = label ? nil : style.palette.shadow
-                    g.shadowBlur0 = shadowBlur
-                    g.opacity = b.ghost
-                    g.setNeedsDisplay()
-                    b.layer.addSublayer(g)
-                    b.glyphs[p.k].append(g)
-                }
+                let gs = makeGlyphs(texts[p.k], attrs: m.attrs, line: m.line,
+                                    at: CGPoint(x: padX + p.x, y: padT + p.baseline), pad: pad, scale: scale,
+                                    shadow: label ? nil : style.palette.shadow, blur: shadowBlur, opacity: b.ghost)
+                gs.forEach { b.layer.addSublayer($0) }
+                b.glyphs[p.k] = gs
             }
             world.addSublayer(b.layer)
         }
