@@ -5,6 +5,8 @@ import QuartzCore
 final class LyricScene {
     let root = CALayer()
     private let bg = CAGradientLayer()
+    private let glow = CAGradientLayer()     // beat glow behind the text
+    private let strobeLayer = CALayer()      // beat flash in front
     private let content = CALayer()
     private let ambientHost = CALayer()
     private let stage = CALayer()
@@ -25,6 +27,10 @@ final class LyricScene {
     var moodSetting: MoodSetting = .auto { didSet { reset() } }
     var theme: Theme = .night { didSet { applyTheme() } }
     var showCaption = true { didSet { updateCaption() } }
+    var beatSync: BeatSync = .strong
+    var strobe = false
+    private var moodName = "mid"
+    private var lastStrobe = 0.0
 
     private enum Key: Equatable { case title, none, line(Int), meta(Int) }
     private var key: Key?
@@ -49,8 +55,15 @@ final class LyricScene {
             bg.endPoint = CGPoint(x: 1.13, y: 1.1)
             bg.opacity = 0
             content.opacity = 0
+            glow.type = .radial
+            glow.startPoint = CGPoint(x: 0.43, y: 0.5)
+            glow.endPoint = CGPoint(x: 0.95, y: 1.05)
+            glow.opacity = 0
+            strobeLayer.opacity = 0
             root.addSublayer(bg)
+            root.addSublayer(glow)
             root.addSublayer(content)
+            root.addSublayer(strobeLayer)
             content.addSublayer(ambientHost)
             content.addSublayer(stage)
             ambientHost.opacity = 0
@@ -79,6 +92,8 @@ final class LyricScene {
             let r = CGRect(origin: .zero, size: size)
             root.frame = r
             bg.frame = r
+            glow.frame = r
+            strobeLayer.frame = r
             content.frame = r
             ambientHost.frame = r
             stage.frame = r
@@ -93,6 +108,8 @@ final class LyricScene {
         let p = palette
         setQuietly {
             bg.colors = p.bg
+            glow.colors = [p.fg.withAlphaComponent(0.35).cgColor, p.fg.withAlphaComponent(0).cgColor]
+            strobeLayer.backgroundColor = p.fg.cgColor
             bg.locations = theme == .night || theme == .clear ? [0, 0.8] : [0, 0.75]
             capTitle.foregroundColor = p.fg.cgColor
             capArtist.foregroundColor = p.fg.cgColor
@@ -251,7 +268,8 @@ final class LyricScene {
                 ? ConstellationCanvas(in: stage, size: size, color: palette.fg.cgColor)
                 : FlowCanvas(in: stage, focus: CGPoint(x: size.width * 0.43, y: size.height / 2))
         }
-        let mood = stars ? Mood.calm : Mood.named(moodSetting == .auto ? autoMood : moodSetting.rawValue)
+        moodName = stars ? "calm" : (moodSetting == .auto ? autoMood : moodSetting.rawValue)
+        let mood = Mood.named(moodName)
         let style = FlowStyle(base: baseFont, palette: palette, backing: backing, fontSeed: hashString(title))
         let block = canvas!.add(line: line, seed: hashString(line.text) &+ salt, mood: mood, style: style,
                                 stageSize: size, instant: wasJumped)
@@ -271,6 +289,42 @@ final class LyricScene {
                               ghost: c.block.ghost, instant: t - w.time > 0.5)
         }
         if changed { current = c }
+    }
+
+    // MARK: beat
+
+    /// Called on each detected beat (strength 0…1), already delayed to match what you hear.
+    func beat(_ strength: Double) {
+        guard active, beatSync != .off else { return }
+        let energetic = moodName == "energetic"
+        let k = CGFloat(strength) * (energetic ? 1.35 : moodName == "calm" ? 0.7 : 1)
+
+        func pulse(_ layer: CALayer, _ key: String, _ peak: Any, rest: Any, duration: Double, additive: Bool = false) {
+            let a = CAKeyframeAnimation(keyPath: key)
+            a.values = [rest, peak, rest]
+            a.keyTimes = [0, 0.22, 1]
+            a.duration = duration
+            a.timingFunctions = [timing(0.2, 0.8, 0.3, 1), timing(0.4, 0, 0.6, 1)]
+            a.isAdditive = additive
+            layer.add(a, forKey: "beat-" + key)
+        }
+        // Pulse: the text breathes and a soft glow blooms behind it
+        pulse(stage, "transform.scale", 1 + 0.022 * k, rest: 1, duration: 0.34)
+        pulse(glow, "opacity", Float(0.55 * k), rest: Float(0), duration: 0.5)
+        pulse(ambientHost, "transform.scale", 1 + 0.05 * k, rest: 1, duration: 0.4)
+        // Bounce: the current line hops
+        if beatSync == .strong, let c = current {
+            pulse(c.block.layer, "transform.translation.y", -baseFont * 0.06 * k, rest: CGFloat(0), duration: 0.3, additive: true)
+        }
+        // Strobe: brief flash on strong beats of energetic songs, at most ~3 per second
+        let now = CACurrentMediaTime()
+        if strobe && energetic && strength > 0.7 && now - lastStrobe > 0.33 {
+            lastStrobe = now
+            let a = CAKeyframeAnimation(keyPath: "opacity")
+            a.values = [Float(0.22 * strength), Float(0)]
+            a.duration = 0.12
+            strobeLayer.add(a, forKey: "strobe")
+        }
     }
 
     // MARK: abstract graphics

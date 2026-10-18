@@ -67,6 +67,18 @@ enum MoodSetting: String, CaseIterable {
     }
 }
 
+enum BeatSync: String, CaseIterable {
+    case off, soft, strong
+
+    var title: String {
+        switch self {
+        case .off: return "Tắt"
+        case .soft: return "Nhẹ — chữ và nền đập theo nhịp"
+        case .strong: return "Mạnh — thêm chữ nảy theo nhịp"
+        }
+    }
+}
+
 enum FontSet: String, CaseIterable {
     case noto, system
 
@@ -108,6 +120,15 @@ final class Settings {
     var fontSet: FontSet {
         get { FontSet(rawValue: d.string(forKey: "fontSet") ?? "") ?? .noto }
         set { set(newValue.rawValue, "fontSet") }
+    }
+    var beatSync: BeatSync {
+        get { BeatSync(rawValue: d.string(forKey: "beatSync") ?? "") ?? .strong }
+        set { set(newValue.rawValue, "beatSync") }
+    }
+    /// Brief flashes on strong beats in energetic songs. Off by default (photosensitivity).
+    var strobe: Bool {
+        get { d.bool(forKey: "strobe") }
+        set { set(newValue, "strobe") }
     }
     var caption: Bool {
         get { d.object(forKey: "caption") as? Bool ?? true }

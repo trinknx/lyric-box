@@ -17,7 +17,7 @@ Tải **[Lyric-Box-0.2.0.dmg](https://github.com/trinknx/lyric-box/releases/late
 
 1. Mở file `.dmg`, kéo **Lyric Box** vào **Applications**.
 2. Mở lần đầu: macOS sẽ chặn vì app chưa được Apple ký số. Vào **System Settings → Privacy & Security**, bấm **Open Anyway**. (Hoặc: `xattr -dr com.apple.quarantine "/Applications/Lyric Box.app"`)
-3. Phát nhạc trên **app Spotify** (Free hay Premium đều được). Khi macOS hỏi *"Lyric Box muốn điều khiển Spotify"*, bấm **OK**.
+3. Phát nhạc trên **app Spotify** (Free hay Premium đều được). Khi macOS hỏi *"Lyric Box muốn điều khiển Spotify"*, bấm **OK**; cho phép thêm *âm thanh từ ứng dụng khác* nếu muốn hiệu ứng theo nhịp.
 4. Xong: lời tự hiện trên màn hình nền. Icon trăng khuyết trên thanh menu là menu cài đặt.
 
 ## Build
@@ -55,6 +55,7 @@ Thêm `LYRICBOX_SNAPSHOT=/thư/mục` để app tự vẽ 10 ảnh PNG của mà
 - **Vẽ**: mỗi chữ cái là một `CALayer` vẽ bằng Core Text. Camera là 3 layer lồng nhau (xoay → zoom → dịch). Mọi chuyển động, kể cả đồ họa nền, là animation Core Animation do render server của macOS chạy; code của app chỉ kiểm tra thời gian lời ~20 lần/giây.
 - **Phông**: đi kèm Noto Serif và Noto Sans bản variable (giấy phép SIL Open Font License, `native/Resources/Fonts/OFL.txt`); trục độ đậm và độ rộng cho kiểu thường, đậm và đậm hẹp. Tiếng Nhật dùng Hiragino Mincho / Hiragino Sans. Có thể chọn phông hệ thống (New York / SF Pro) trong menu.
 - **Cửa sổ**: tầng ngay dưới desktop (`desktopWindow − 1`), ở mọi Space, click xuyên qua.
+- **Theo nhịp** (macOS 14.2+): một Core Audio process tap chỉ nghe các tiến trình của Spotify qua một thiết bị gộp riêng tư. Trên luồng âm thanh, mẫu được rút gọn thành đường bao năng lượng âm trầm; một nhịp là khi năng lượng vọt lên trên mức trung bình gần đây, còn tempo lấy từ tự tương quan của đường bao onset trong ~6 giây gần nhất (chỉ hiện khi đã ổn định). Nhịp được gửi trễ đúng độ trễ của thiết bị phát, để hiệu ứng khớp lúc bạn nghe. Không ghi lại hay lưu âm thanh. Cần quyền "âm thanh từ ứng dụng khác", macOS hỏi ở lần đầu.
 
 ### Cấu trúc
 
@@ -68,6 +69,7 @@ native/Sources/LyricBox/
   Flow.swift            canvas COTODAMA: bố cục khối chữ, camera, hiện từng chữ cái
   Constellation.swift   kiểu chòm sao: ngôi sao, đường nối, trời sao lấp lánh
   Ambient.swift         4 kiểu đồ họa (vòng sóng, dải sóng, lưới chấm, tia sáng)
+  AudioTap.swift        nghe âm thanh Spotify, phát hiện nhịp / tempo
   HotKeys.swift         ⌥⌘[ / ⌥⌘]
 ```
 
@@ -76,6 +78,7 @@ native/Sources/LyricBox/
 - **Hiện lời trên màn hình nền**: bật/tắt
 - **Kiểu chữ**: COTODAMA tự động theo bài / êm dịu / vừa / sôi động / chòm sao
 - **Phông chữ**: Noto Serif / Sans (giống COTODAMA dùng cho chữ Latin và tiếng Việt) hoặc phông hệ thống
+- **Theo nhịp nhạc**: tắt / nhẹ (chữ và nền đập theo nhịp) / mạnh (thêm dòng chữ nảy); tùy chọn nháy sáng ở nhịp mạnh của bài sôi động; hiện BPM đo được
 - **Nền**: Tối · Sáng (acrylic trong) · Trong suốt chữ trắng · Trong suốt chữ đen (giữ hình nền của bạn)
 - **Màn hình**: màn hình chính, chọn màn hình, hoặc tất cả
 - **Lệch lời**: `⌥⌘]` lời sớm hơn · `⌥⌘[` lời trễ hơn (0.25s mỗi lần)
@@ -91,6 +94,6 @@ native/Sources/LyricBox/
 - **Chòm sao** (3D): mỗi chữ là một ngôi sao ở một độ sâu riêng, chữ gần to, chữ xa nhỏ. Các sao của dòng hiện mờ trước để thấy hình chòm sao; khi hát tới chữ nào, sao đó sáng lên, một đường nối mọc ra từ sao trước xuyên qua không gian 3D, và chữ được gõ ra bên cạnh. Cả bầu trời đung đưa chậm như đang được kéo bằng tay, chữ gần di chuyển nhiều hơn chữ xa (thị sai), còn chữ luôn quay mặt về phía bạn. Chòm sao mới bay ra từ xa, chòm cũ lùi sâu và mờ đi. Ở chế độ tự động, khoảng một nửa số bài êm dịu dùng kiểu này.
 - Bài không có lời: "poster" chữ từ tên bài → ca sĩ → album (đổi mỗi 8s) trên nền đồ họa động (vòng sóng, dải sóng, lưới chấm, tia sáng; mỗi bài một kiểu). Đoạn nhạc dạo giữa bài cũng hiện đồ họa này.
 
-Giới hạn: Spotify không cho truy cập luồng âm thanh, nên đồ họa không theo nhịp thật.
+- **Theo nhịp**: chữ và quầng sáng đập theo nhịp, dòng hiện tại nảy lên (chế độ mạnh), đồ họa nền phồng lên, bài sôi động có thể nháy sáng ở nhịp mạnh (mặc định tắt).
 
 `legacy-web/` là bản web player đầu tiên (có thanh điều khiển, nạp file nhạc/LRC, 7 kiểu chữ), giữ lại để tham khảo.

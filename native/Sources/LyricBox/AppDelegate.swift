@@ -71,6 +71,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var previewTrack: Track?
     private let previewStart = CACurrentMediaTime()
 
+    // beat detection from Spotify's audio (macOS 14.2+)
+    private var tapBox: AnyObject?
+    private var tapRetries = 0
+    private var tapStarting = false
+    private var lastTapCheck = CACurrentMediaTime()
+    private var previewBeat: Timer?
+    private let debug = ProcessInfo.processInfo.environment["LYRICBOX_DEBUG"] != nil
+
     private var track: Track? { preview != nil ? previewTrack : spotify.track }
     private var playing: Bool { preview != nil ? true : spotify.playing }
     private var position: Double {
@@ -98,9 +106,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         if let preview {
             startPreview(noLyrics: preview == "nolyrics")
+            // fake 120 BPM so the beat effects can be previewed
+            previewBeat = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+                self?.scenes.forEach { $0.beat(0.8) }
+            }
         } else {
-            spotify.onTrack = { [weak self] t in self?.trackChanged(t) }
-            spotify.onState = { [weak self] in self?.stateChanged() }
+            spotify.onTrack = { [weak self] t in
+                self?.trackChanged(t)
+                self?.tapRetries = 0
+            }
+            spotify.onState = { [weak self] in
+                self?.stateChanged()
+                self?.updateTap()
+            }
             spotify.start()
         }
 
@@ -119,6 +137,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let t = position + settings.offset
         let p = playing
         for s in scenes { s.tick(time: t, playing: p) }
+        watchTap()
+    }
+
+    // MARK: beat tap
+
+    @available(macOS 14.2, *)
+    private var tap: SpotifyAudioTap? { tapBox as? SpotifyAudioTap }
+
+    /// Debug log to ~/Library/Logs/LyricBox.log (only with LYRICBOX_DEBUG set).
+    private func dlog(_ msg: String) {
+        guard debug else { return }
+        let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/LyricBox.log")
+        let line = "\(Date()) \(msg)\n"
+        if let h = try? FileHandle(forWritingTo: url) {
+            h.seekToEndOfFile()
+            h.write(line.data(using: .utf8)!)
+            try? h.close()
+        } else {
+            try? line.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private var lastLoggedStatus = ""
+
+    private func updateTap() {
+        let status = "spotify=\(spotify.status) playing=\(playing) beatSync=\(settings.beatSync.rawValue)"
+        if status != lastLoggedStatus { lastLoggedStatus = status; dlog(status) }
+        guard #available(macOS 14.2, *) else { return }
+        let want = preview == nil && settings.enabled && settings.beatSync != .off && spotify.status == .ok
+        if !want {
+            tap?.stop()
+            return
+        }
+        if tap?.running == true { return }
+        let t = tap ?? SpotifyAudioTap()
+        t.onBeat = { [weak self] s in
+            guard let self else { return }
+            if self.debug { self.dlog(String(format: "beat %.2f  bpm %.0f", s, t.bpm)) }
+            self.scenes.forEach { $0.beat(s) }
+        }
+        tapBox = t
+        guard !tapStarting else { return }
+        tapStarting = true
+        // Core Audio can block here (e.g. while the permission prompt is up): keep the main thread free
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let ok = t.start()
+            DispatchQueue.main.async {
+                self?.tapStarting = false
+                self?.dlog("tap start: \(ok ? "ok" : "failed")")
+            }
+        }
+    }
+
+    /// Spotify can move playback to another helper process; if a playing song gives us
+    /// only silence for a while, re-create the tap (a few times, then give up until the next song).
+    private func watchTap() {
+        guard #available(macOS 14.2, *), let t = tap, t.running, playing else { return }
+        let now = CACurrentMediaTime()
+        guard now - lastTapCheck > 5 else { return }
+        lastTapCheck = now
+        if Date().timeIntervalSince(t.lastAudio) > 6 && tapRetries < 3 {
+            tapRetries += 1
+            dlog("no audio, re-tapping (\(tapRetries))")
+            DispatchQueue.global(qos: .userInitiated).async { t.start() }
+        }
+    }
+
+    private func beatStatus() -> String {
+        guard #available(macOS 14.2, *) else { return "Cần macOS 14.2 trở lên" }
+        if settings.beatSync == .off { return "Đang tắt" }
+        guard let t = tap, t.running else { return playing ? "Chưa nghe được Spotify" : "Chờ Spotify phát nhạc" }
+        if Date().timeIntervalSince(t.lastAudio) > 6 { return "⚠︎ Không nhận được âm thanh — kiểm tra quyền" }
+        return t.bpm > 0 ? String(format: "♩ %.0f BPM", t.bpm) : "Đang nghe nhịp…"
     }
 
     private func stateChanged() {
@@ -211,6 +302,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         scene.theme = settings.theme
         scene.moodSetting = settings.mood
         scene.showCaption = settings.caption
+        scene.beatSync = settings.beatSync
+        scene.strobe = settings.strobe
         scene.setTrack(track)
         if let lyrics, let t = track, lyrics.id == t.id { scene.setLyrics(lyrics.lrc, for: t.id, duration: t.duration) }
         scene.setActive(playing)
@@ -220,11 +313,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func settingChanged(_ k: String) {
         switch k {
-        case "enabled", "display": syncWindows()
+        case "enabled", "display":
+            syncWindows()
+            updateTap()
         case "theme": scenes.forEach { $0.theme = settings.theme }
         case "mood": scenes.forEach { $0.moodSetting = settings.mood }
         case "caption": scenes.forEach { $0.showCaption = settings.caption }
         case "offset": scenes.forEach { $0.reset() }
+        case "beatSync", "strobe":
+            scenes.forEach { $0.beatSync = settings.beatSync; $0.strobe = settings.strobe }
+            updateTap()
         case "fontSet":
             Fonts.useNoto = settings.fontSet == .noto
             scenes.forEach { $0.reset() }
@@ -279,6 +377,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             fonts.addItem(ActionItem(f.title, checked: settings.fontSet == f) { [weak self] in self?.settings.fontSet = f })
         }
         menu.addItem(submenu("Phông chữ", fonts))
+
+        let beat = NSMenu()
+        let st = NSMenuItem(title: beatStatus(), action: nil, keyEquivalent: "")
+        st.isEnabled = false
+        beat.addItem(st)
+        beat.addItem(.separator())
+        for b in BeatSync.allCases {
+            beat.addItem(ActionItem(b.title, checked: settings.beatSync == b) { [weak self] in self?.settings.beatSync = b })
+        }
+        beat.addItem(.separator())
+        beat.addItem(ActionItem("Nháy sáng theo nhịp (bài sôi động)", checked: settings.strobe) { [weak self] in self?.settings.strobe.toggle() })
+        beat.addItem(ActionItem("Mở cài đặt quyền âm thanh…") {
+            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture")!)
+        })
+        menu.addItem(submenu("Theo nhịp nhạc", beat))
 
         let theme = NSMenu()
         for t in Theme.allCases {
