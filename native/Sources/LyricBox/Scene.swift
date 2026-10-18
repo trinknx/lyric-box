@@ -22,6 +22,9 @@ final class LyricScene {
     private var noLyrics = false
     private var trackStart = CACurrentMediaTime()
     private var autoMood = "mid"
+    private var wps = 1.5
+    private var audioBpm = 0.0
+    private var chorus: Set<Int> = []
 
     // settings
     var moodSetting: MoodSetting = .auto { didSet { reset() } }
@@ -140,6 +143,8 @@ final class LyricScene {
         trackId = t?.id ?? ""
         lines = []
         noLyrics = false
+        chorus = []
+        audioBpm = 0
         trackStart = CACurrentMediaTime()
         pickMood()
         applyTheme()   // hue follows the song
@@ -150,8 +155,24 @@ final class LyricScene {
         guard id == trackId else { return }
         lines = lrc.map { LRC.lines(from: $0, duration: duration) } ?? []
         noLyrics = lines.isEmpty
+        findChorus()
         pickMood()
         reset()
+    }
+
+    /// Lines that come back during the song are taken as the chorus.
+    private func findChorus() {
+        let norm = lines.map { String($0.text.lowercased().unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }) }
+        var count: [String: Int] = [:]
+        for n in norm where n.count >= 6 { count[n, default: 0] += 1 }
+        chorus = Set(norm.indices.filter { count[norm[$0], default: 0] >= 2 })
+    }
+
+    /// Tempo measured from the audio refines the mood (only affects the next lines).
+    func audioHint(bpm: Double) {
+        guard abs(bpm - audioBpm) > 3 else { return }
+        audioBpm = bpm
+        pickMood()
     }
 
     /// Mood from singing density, like the web version.
@@ -161,8 +182,11 @@ final class LyricScene {
             words += l.words.count
             secs += min(l.end - l.time, 8)
         }
-        let wps = secs > 0 ? Double(words) / secs : 1.5
-        autoMood = wps > 2.6 ? "energetic" : wps > 1.5 ? "mid" : "calm"
+        wps = secs > 0 ? Double(words) / secs : 1.5
+        var level = wps > 2.6 ? 2 : wps > 1.5 ? 1 : 0
+        // fast songs one level up, slow ones one level down
+        if audioBpm >= 128 { level += 1 } else if audioBpm > 0 && audioBpm <= 82 { level -= 1 }
+        autoMood = ["calm", "mid", "energetic"][max(0, min(2, level))]
     }
 
     // MARK: activity
@@ -256,21 +280,45 @@ final class LyricScene {
             canvas = nil
             return
         }
-        // constellation when chosen, and for half of the calm songs in automatic mode
-        let stars = moodSetting == .constellation
-            || (moodSetting == .auto && autoMood == "calm" && hashString(title) % 2 == 0)
-        if let c = canvas, (c is ConstellationCanvas) != stars {
-            c.fadeOut()
+        // pick the style: chosen in the menu, or automatically from the song
+        enum Kind { case flow, stars, rap }
+        var kind = Kind.flow
+        switch moodSetting {
+        case .constellation: kind = .stars; moodName = "calm"
+        case .rap: kind = .rap; moodName = "rap"
+        case .glitch: moodName = "glitch"
+        case .calm, .mid, .energetic: moodName = moodSetting.rawValue
+        case .auto:
+            let h = hashString(title)
+            if wps > 3.2 { kind = .rap; moodName = "rap" }                                  // dense flow: rap
+            else if autoMood == "calm" && h % 2 == 0 { kind = .stars; moodName = "calm" }   // half the calm songs
+            else if autoMood == "energetic" && h % 3 == 0 { moodName = "glitch" }            // a third of the energetic ones
+            else { moodName = autoMood }
+        }
+        let fits: Bool
+        switch kind {
+        case .flow: fits = canvas is FlowCanvas
+        case .stars: fits = canvas is ConstellationCanvas
+        case .rap: fits = canvas is WordZoomCanvas
+        }
+        if !fits {
+            canvas?.fadeOut()
             canvas = nil
         }
         if canvas == nil {
-            canvas = stars
-                ? ConstellationCanvas(in: stage, size: size, color: palette.fg.cgColor)
-                : FlowCanvas(in: stage, focus: CGPoint(x: size.width * 0.43, y: size.height / 2))
+            switch kind {
+            case .flow: canvas = FlowCanvas(in: stage, focus: CGPoint(x: size.width * 0.43, y: size.height / 2))
+            case .stars: canvas = ConstellationCanvas(in: stage, size: size, color: palette.fg.cgColor)
+            case .rap: canvas = WordZoomCanvas(in: stage, size: size)
+            }
         }
-        moodName = stars ? "calm" : (moodSetting == .auto ? autoMood : moodSetting.rawValue)
         let mood = Mood.named(moodName)
-        let style = FlowStyle(base: baseFont, palette: palette, backing: backing, fontSeed: hashString(title))
+        var style = FlowStyle(base: baseFont, palette: palette, backing: backing, fontSeed: hashString(title))
+        // chorus: bigger, bolder, and a hit when it starts
+        if case .line(let i) = k, chorus.contains(i) {
+            style.intensity = 1.25
+            if !chorus.contains(i - 1) && !wasJumped { DispatchQueue.main.async { [weak self] in self?.hit() } }
+        }
         let block = canvas!.add(line: line, seed: hashString(line.text) &+ salt, mood: mood, style: style,
                                 stageSize: size, instant: wasJumped)
         current = (block, line, mood, Array(repeating: false, count: line.words.count))
@@ -284,20 +332,35 @@ final class LyricScene {
             changed = true
             let next = k + 1 < c.line.words.count ? c.line.words[k + 1].time : w.time + 0.6
             let span = max(0.12, min(next - w.time, 0.8)) * 0.8
-            c.block.onReveal?(k, t - w.time > 0.5)
+            let late = t - w.time > 0.5
+            c.block.onReveal?(k, late)
             FlowCanvas.reveal(c.block.glyphs[k], size: c.block.sizes[k], span: span, mood: c.mood,
-                              ghost: c.block.ghost, instant: t - w.time > 0.5)
+                              ghost: c.block.ghost, instant: late)
+            if c.mood.glitch && !late { c.block.glitch(0.45) }
         }
         if changed { current = c }
+        // blurred lines snap into focus on the next beat; without beats, shortly after appearing
+        if c.block.blurred && CACurrentMediaTime() - c.block.created > 0.75 { c.block.focus() }
     }
 
     // MARK: beat
 
     /// Called on each detected beat (strength 0…1), already delayed to match what you hear.
-    func beat(_ strength: Double) {
+    /// Start of a chorus: a strong pulse and glow, even without beat detection.
+    private func hit() {
+        let saved = beatSync
+        if beatSync == .off { beatSync = .soft }
+        beat(1, chorusHit: true)
+        beatSync = saved
+    }
+
+    func beat(_ strength: Double, chorusHit: Bool = false) {
         guard active, beatSync != .off else { return }
-        let energetic = moodName == "energetic"
-        let k = CGFloat(strength) * (energetic ? 1.35 : moodName == "calm" ? 0.7 : 1)
+        let energetic = ["energetic", "glitch", "rap"].contains(moodName)
+        var k = CGFloat(strength) * (energetic ? 1.35 : moodName == "calm" ? 0.7 : 1)
+        if case .line(let i) = key, chorus.contains(i) { k *= 1.3 }
+        if chorusHit { k = 2 }
+        if let c = current, c.block.blurred { c.block.focus() }   // blur → focus on the beat
 
         func pulse(_ layer: CALayer, _ key: String, _ peak: Any, rest: Any, duration: Double, additive: Bool = false) {
             let a = CAKeyframeAnimation(keyPath: key)
@@ -315,7 +378,14 @@ final class LyricScene {
         // Bounce: the current line hops
         if beatSync == .strong, let c = current {
             pulse(c.block.layer, "transform.translation.y", -baseFont * 0.06 * k, rest: CGFloat(0), duration: 0.3, additive: true)
+            // Stretch: a squash-and-stretch on the hop
+            if moodName != "calm" {
+                pulse(c.block.layer, "transform.scale.y", 0.07 * k, rest: CGFloat(0), duration: 0.26, additive: true)
+                pulse(c.block.layer, "transform.scale.x", -0.035 * k, rest: CGFloat(0), duration: 0.26, additive: true)
+            }
         }
+        // Glitch songs twitch on strong beats
+        if moodName == "glitch", strength > 0.55, let c = current { c.block.glitch(min(1.2, k)) }
         // Strobe: brief flash on strong beats of energetic songs, at most ~3 per second
         let now = CACurrentMediaTime()
         if strobe && energetic && strength > 0.7 && now - lastStrobe > 0.33 {

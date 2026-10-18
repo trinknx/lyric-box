@@ -69,6 +69,7 @@ native/Sources/LyricBox/
   Flow.swift            canvas COTODAMA: bố cục khối chữ, camera, hiện từng chữ cái
   Constellation.swift   kiểu chòm sao: ngôi sao, đường nối, trời sao lấp lánh
   Ambient.swift         4 kiểu đồ họa (vòng sóng, dải sóng, lưới chấm, tia sáng)
+  WordZoom.swift        kiểu rap: từng chữ một
   AudioTap.swift        nghe âm thanh Spotify, phát hiện nhịp / tempo
   HotKeys.swift         ⌥⌘[ / ⌥⌘]
 ```
@@ -76,7 +77,7 @@ native/Sources/LyricBox/
 ## Menu trên thanh menu
 
 - **Hiện lời trên màn hình nền**: bật/tắt
-- **Kiểu chữ**: COTODAMA tự động theo bài / êm dịu / vừa / sôi động / chòm sao
+- **Kiểu chữ**: COTODAMA tự động theo bài / êm dịu / vừa / sôi động / chòm sao / rap / glitch
 - **Phông chữ**: Noto Serif / Sans (giống COTODAMA dùng cho chữ Latin và tiếng Việt) hoặc phông hệ thống
 - **Theo nhịp nhạc**: tắt / nhẹ (chữ và nền đập theo nhịp) / mạnh (thêm dòng chữ nảy); tùy chọn nháy sáng ở nhịp mạnh của bài sôi động; hiện BPM đo được
 - **Nền**: Tối · Sáng (acrylic trong) · Trong suốt chữ trắng · Trong suốt chữ đen (giữ hình nền của bạn)
@@ -94,6 +95,12 @@ native/Sources/LyricBox/
 - **Chòm sao** (3D): mỗi chữ là một ngôi sao ở một độ sâu riêng, chữ gần to, chữ xa nhỏ. Các sao của dòng hiện mờ trước để thấy hình chòm sao; khi hát tới chữ nào, sao đó sáng lên, một đường nối mọc ra từ sao trước xuyên qua không gian 3D, và chữ được gõ ra bên cạnh. Cả bầu trời đung đưa chậm như đang được kéo bằng tay, chữ gần di chuyển nhiều hơn chữ xa (thị sai), còn chữ luôn quay mặt về phía bạn. Chòm sao mới bay ra từ xa, chòm cũ lùi sâu và mờ đi. Ở chế độ tự động, khoảng một nửa số bài êm dịu dùng kiểu này.
 - Bài không có lời: "poster" chữ từ tên bài → ca sĩ → album (đổi mỗi 8s) trên nền đồ họa động (vòng sóng, dải sóng, lưới chấm, tia sáng; mỗi bài một kiểu). Đoạn nhạc dạo giữa bài cũng hiện đồ họa này.
 
-- **Theo nhịp**: chữ và quầng sáng đập theo nhịp, dòng hiện tại nảy lên (chế độ mạnh), đồ họa nền phồng lên, bài sôi động có thể nháy sáng ở nhịp mạnh (mặc định tắt).
+- **Rap**: mỗi lần một chữ thật to ở giữa, bật vào lúc hát còn chữ trước phóng qua, cả dòng hiện nhỏ bên dưới. Chế độ tự động dùng khi lời hát rất dày.
+- **Glitch** (rock / điện tử): chữ giật, nhấp nháy và tách bóng màu khi hiện ra và ở nhịp mạnh.
+- **Sôi động**: khối chữ nghiêng và xoay vào; hết dòng thì chữ vỡ thành hạt sáng.
+- **Vừa**: dòng mới hiện mờ rồi nét căng vào đúng nhịp tiếp theo.
+- **Điệp khúc**: các dòng lặp lại trong bài được coi là điệp khúc: chữ nhấn to hơn, zoom nhiều hơn, hiệu ứng nhịp mạnh hơn, và một cú "hit" (lóe sáng + đập) khi điệp khúc bắt đầu.
+- **Tâm trạng theo âm thanh**: khi tempo đã ổn định, bài nhanh (≥128 BPM) lên một mức, bài chậm (≤82 BPM) xuống một mức. Chế độ tự động còn dùng chòm sao cho nửa số bài êm dịu và glitch cho một phần ba số bài sôi động.
+- **Theo nhịp**: chữ và quầng sáng đập theo nhịp, dòng hiện tại nảy lên kèm co giãn (chế độ mạnh), đồ họa nền phồng lên, bài sôi động có thể nháy sáng ở nhịp mạnh (mặc định tắt).
 
 `legacy-web/` là bản web player đầu tiên (có thanh điều khiển, nạp file nhạc/LRC, 7 kiểu chữ), giữ lại để tham khảo.

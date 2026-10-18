@@ -26,6 +26,7 @@ final class WallpaperWindow: NSWindow {
         isReleasedWhenClosed = false
         let view = NSView(frame: CGRect(origin: .zero, size: screen.frame.size))
         view.wantsLayer = true
+        view.layerUsesCoreImageFilters = true   // blur → focus
         if attach { view.layer?.addSublayer(scene.root) }
         contentView = view
         setFrame(screen.frame, display: true)
@@ -197,6 +198,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let now = CACurrentMediaTime()
         guard now - lastTapCheck > 5 else { return }
         lastTapCheck = now
+        // the measured tempo refines the automatic mood once the song has settled
+        if t.bpm > 0 && spotify.position > 8 {
+            let bpm = t.bpm
+            scenes.forEach { $0.audioHint(bpm: bpm) }
+        }
         if Date().timeIntervalSince(t.lastAudio) > 6 && tapRetries < 3 {
             tapRetries += 1
             dlog("no audio, re-tapping (\(tapRetries))")
@@ -467,7 +473,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: debug snapshots (LYRICBOX_SNAPSHOT=/some/dir) — renders the scene to PNGs
 
     private func scheduleSnapshots(_ dir: String) {
-        let times: [Double] = [2.5, 5.5, 9, 12.5, 16, 20, 25, 29, 33, 41]
+        // LYRICBOX_SNAPSHOT_AT="8.3,8.6" picks the moments (seconds after launch)
+        let times: [Double] = ProcessInfo.processInfo.environment["LYRICBOX_SNAPSHOT_AT"]?
+            .split(separator: ",").compactMap { Double($0) } ?? [2.5, 5.5, 9, 12.5, 16, 20, 25, 29, 33, 41]
         for (i, t) in times.enumerated() {
             DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak self] in
                 self?.snapshot(URL(fileURLWithPath: dir).appendingPathComponent(String(format: "snap-%02d.png", i)))

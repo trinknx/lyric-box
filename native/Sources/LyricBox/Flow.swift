@@ -1,5 +1,6 @@
 import AppKit
 import QuartzCore
+import CoreImage
 
 /* COTODAMA-like "flow" canvas.
    Every lyric line becomes a text block on one big virtual canvas. A new block is
@@ -26,6 +27,10 @@ struct Mood {
     let rise: CGFloat?          // letters rise by this many em; nil = pop in
     let dur: Double
     let ease: CAMediaTimingFunction
+    var tilt: CGFloat = 0           // random extra tilt (degrees) + spin-in
+    var dissolve = false            // old line bursts into particles instead of dimming
+    var focusIn = false             // new line starts blurred, snaps sharp on the beat
+    var glitch = false              // jitter / colour split on words and strong beats
 
     static let calm = Mood(fonts: [.serif], turn: 0.3, cam: 1.5, camEase: timing(0.45, 0, 0.15, 1),
                            emph: 1.45, units: 15, maxZoom: 1.25, ghost: 0.45, label: 0.08,
@@ -35,10 +40,26 @@ struct Mood {
                           rise: 0.35, dur: 0.3, ease: timing(0.16, 1, 0.3, 1))
     static let energetic = Mood(fonts: [.impact, .sans], turn: 0.55, cam: 0.52, camEase: timing(0.3, 1.35, 0.45, 1),
                                 emph: 2, units: 9, maxZoom: 1.7, ghost: 0.1, label: 0.25,
-                                rise: nil, dur: 0.22, ease: timing(0.34, 1.56, 0.64, 1))
+                                rise: nil, dur: 0.22, ease: timing(0.34, 1.56, 0.64, 1),
+                                tilt: 7, dissolve: true)
+    static let glitchy = Mood(fonts: [.impact], turn: 0.5, cam: 0.4, camEase: timing(0.7, 0, 0.3, 1),
+                              emph: 1.9, units: 9, maxZoom: 1.6, ghost: 0, label: 0.3,
+                              rise: nil, dur: 0.12, ease: timing(0.2, 1.4, 0.5, 1),
+                              tilt: 4, dissolve: true, glitch: true)
+    static let rap = Mood(fonts: [.impact], turn: 0, cam: 0.3, camEase: timing(0.3, 0, 0.3, 1),
+                          emph: 1, units: 9, maxZoom: 1, ghost: 0, label: 0,
+                          rise: 0, dur: 0.06, ease: timing(0.2, 0.8, 0.3, 1))
 
     static func named(_ s: String) -> Mood {
-        switch s { case "calm": return .calm; case "energetic": return .energetic; default: return .mid }
+        switch s {
+        case "calm": return .calm
+        case "energetic": return .energetic
+        case "glitch": return .glitchy
+        case "rap": return .rap
+        default: return Mood(fonts: Mood.mid.fonts, turn: Mood.mid.turn, cam: Mood.mid.cam, camEase: Mood.mid.camEase,
+                             emph: Mood.mid.emph, units: Mood.mid.units, maxZoom: Mood.mid.maxZoom, ghost: Mood.mid.ghost,
+                             label: Mood.mid.label, rise: Mood.mid.rise, dur: Mood.mid.dur, ease: Mood.mid.ease, focusIn: true)
+        }
     }
 }
 
@@ -51,9 +72,14 @@ enum Fonts {
     static func register() {
         guard !registered else { return }
         registered = true
-        let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().deletingLastPathComponent()
-        let candidates = [Bundle.main.resourceURL?.appendingPathComponent("Fonts"),
-                          exe.appendingPathComponent("../../../Resources/Fonts").standardizedFileURL]
+        let exe = (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath().deletingLastPathComponent()
+        // inside the .app; when run from .build, walk up to native/Resources/Fonts
+        var candidates = [Bundle.main.resourceURL?.appendingPathComponent("Fonts")]
+        var dir = exe
+        for _ in 0..<5 {
+            candidates.append(dir.appendingPathComponent("Resources/Fonts"))
+            dir = dir.deletingLastPathComponent()
+        }
         guard let dir = candidates.compactMap({ $0 }).first(where: { FileManager.default.fileExists(atPath: $0.path) }),
               let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
         for f in files where f.pathExtension == "ttf" {
@@ -150,11 +176,55 @@ final class GlyphLayer: CALayer {
 
 final class Block {
     let layer = CALayer()
+    var tilt: CGFloat = 0
+    var blurred = false
+    let created = CACurrentMediaTime()
     var onReveal: ((_ word: Int, _ instant: Bool) -> Void)?   // extra effect when a word starts
     var x: CGFloat = 0, y: CGFloat = 0, w: CGFloat = 0, h: CGFloat = 0, rot: CGFloat = 0
     var glyphs: [[GlyphLayer]] = []   // per word
     var sizes: [CGFloat] = []         // font size per word (pt)
     var ghost: Float = 0
+
+    /// Snap from blurred to sharp (blur → focus).
+    func focus() {
+        guard blurred else { return }
+        blurred = false
+        let a = CABasicAnimation(keyPath: "filters.blur.inputRadius")
+        a.fromValue = 12
+        a.toValue = 0
+        a.duration = 0.16
+        a.timingFunction = timing(0.2, 0.8, 0.3, 1)
+        setQuietly { layer.setValue(0, forKeyPath: "filters.blur.inputRadius") }
+        layer.add(a, forKey: "focus")
+        let l = layer
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { setQuietly { l.filters = nil } } // no blur cost afterwards
+    }
+
+    /// Short digital glitch: jitter, flicker and a colour-split ghost.
+    func glitch(_ k: CGFloat) {
+        let jit = CAKeyframeAnimation(keyPath: "transform.translation.x")
+        jit.values = [0, 10 * k, -7 * k, 5 * k, -3 * k, 0]
+        jit.calculationMode = .discrete
+        jit.duration = 0.18
+        jit.isAdditive = true
+        layer.add(jit, forKey: "glitch-x")
+        let flick = CAKeyframeAnimation(keyPath: "opacity")
+        flick.values = [1, 0.35, 1, 0.7, 1]
+        flick.calculationMode = .discrete
+        flick.duration = 0.16
+        flick.isAdditive = false
+        if layer.opacity > 0.9 { layer.add(flick, forKey: "glitch-o") }
+        setQuietly {
+            layer.shadowColor = (Int(created * 10) % 2 == 0 ? NSColor.systemRed : NSColor.cyan).cgColor
+            layer.shadowRadius = 0
+            layer.shadowOffset = CGSize(width: 7 * k, height: 0)
+        }
+        let ghost = CAKeyframeAnimation(keyPath: "shadowOpacity")
+        ghost.values = [0, 0.85, 0.4, 0]
+        ghost.calculationMode = .discrete
+        ghost.duration = 0.18
+        layer.add(ghost, forKey: "glitch-s")
+    }
 }
 
 struct FlowStyle {
@@ -162,7 +232,19 @@ struct FlowStyle {
     let palette: Palette
     let backing: CGFloat
     let fontSeed: UInt32     // keeps one font per song
+    var intensity: CGFloat = 1   // >1 in the chorus
 }
+
+/// Soft round dot used for particles.
+let particleDot: CGImage = {
+    let s = 32
+    let ctx = CGContext(data: nil, width: s, height: s, bitsPerComponent: 8, bytesPerRow: 0,
+                        space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                       colors: [CGColor(gray: 1, alpha: 1), CGColor(gray: 1, alpha: 0)] as CFArray, locations: [0, 1])!
+    ctx.drawRadialGradient(g, startCenter: CGPoint(x: 16, y: 16), startRadius: 0, endCenter: CGPoint(x: 16, y: 16), endRadius: 16, options: [])
+    return ctx.makeImage()!
+}()
 
 func setQuietly(_ body: () -> Void) {
     CATransaction.begin()
@@ -263,7 +345,7 @@ final class FlowCanvas: LyricCanvas {
             }
         }
         let rel: [CGFloat] = texts.indices.map { k in
-            k == big ? mood.emph : (texts[k].count <= 2 && avg > 3.5) ? 0.62 : (r.next() < 0.15 ? 1.18 : 1)
+            k == big ? mood.emph * style.intensity : (texts[k].count <= 2 && avg > 3.5) ? 0.62 : (r.next() < 0.15 ? 1.18 : 1)
         }
         var rows: [[Int]] = []
         var units: CGFloat = 0
@@ -277,7 +359,7 @@ final class FlowCanvas: LyricCanvas {
             rows[rows.count - 1].append(k)
             units += u
         }
-        let label = texts.count <= 4 && r.next() < mood.label
+        let label = texts.count <= 4 && r.next() < mood.label * Double(style.intensity)
         b.ghost = r.next() < mood.ghost ? 0.16 : 0
 
         // measure with Core Text
@@ -330,7 +412,8 @@ final class FlowCanvas: LyricCanvas {
             b.y = prev.y + off.x * sin(a) + off.y * cos(a)
             b.rot = prev.rot + dr
         }
-        let zoom = min(mood.maxZoom, stageSize.width * 0.7 / b.w, stageSize.height * 0.76 / b.h)
+        let zoom = min(mood.maxZoom * min(1.15, style.intensity), stageSize.width * 0.7 / b.w, stageSize.height * 0.76 / b.h)
+        b.tilt = CGFloat(r.next() * 2 - 1) * mood.tilt * style.intensity
 
         // build layers: one per letter so each can be spelled out on its own
         let shadowBlur: CGFloat = style.palette.shadow != nil ? style.base * 0.09 : 0
@@ -339,7 +422,13 @@ final class FlowCanvas: LyricCanvas {
         setQuietly {
             b.layer.bounds = CGRect(x: 0, y: 0, width: b.w, height: b.h)
             b.layer.position = CGPoint(x: b.x, y: b.y)
-            b.layer.transform = CATransform3DMakeRotation(b.rot * .pi / 180, 0, 0, 1)
+            b.layer.transform = CATransform3DMakeRotation((b.rot + b.tilt) * .pi / 180, 0, 0, 1)
+            if mood.focusIn && !instant, let blur = CIFilter(name: "CIGaussianBlur") {
+                blur.name = "blur"
+                blur.setValue(12, forKey: kCIInputRadiusKey)
+                b.layer.filters = [blur]
+                b.blurred = true
+            }
             if label {
                 b.layer.backgroundColor = style.palette.fg.cgColor
             }
@@ -357,12 +446,31 @@ final class FlowCanvas: LyricCanvas {
         }
         blocks.append(b)
 
-        // older lines stay, dimmed, then fade away
+        // spin in (energetic): the block swings into its tilt
+        if mood.tilt > 0 && !instant {
+            let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+            spin.fromValue = -0.35
+            spin.toValue = 0
+            spin.isAdditive = true
+            spin.duration = mood.cam * 1.1
+            spin.timingFunction = mood.camEase
+            b.layer.add(spin, forKey: "spin")
+        }
+
+        // older lines stay, dimmed, then fade away; energetic lines burst into particles instead
+        let n = blocks.count
+        if mood.dissolve && n >= 2 && !instant {
+            let prev = blocks[n - 2]
+            burst(prev, color: style.palette.fg.cgColor, base: style.base)
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(0.3)
+            prev.layer.opacity = 0
+            CATransaction.commit()
+        }
         CATransaction.begin()
         CATransaction.setAnimationDuration(0.9)
-        let n = blocks.count
-        for (i, o) in blocks.enumerated() where i < n - 1 {
-            o.layer.opacity = i == n - 2 ? 0.26 : 0.1
+        for (i, o) in blocks.enumerated() where i < n - 1 && !(mood.dissolve && i == n - 2 && !instant) {
+            o.layer.opacity = i == n - 2 ? 0.26 : min(o.layer.opacity, 0.1)
         }
         CATransaction.commit()
         while blocks.count > 3 {
@@ -376,6 +484,35 @@ final class FlowCanvas: LyricCanvas {
 
         focus(b, zoom: zoom, mood: mood, instant: instant)
         return b
+    }
+
+    /// Glowing particles flying out of a block (CAEmitterLayer: animated by the render server).
+    private func burst(_ b: Block, color: CGColor, base: CGFloat) {
+        let em = CAEmitterLayer()
+        em.position = CGPoint(x: b.x, y: b.y)
+        em.transform = CATransform3DMakeRotation((b.rot + b.tilt) * .pi / 180, 0, 0, 1)
+        em.emitterShape = .rectangle
+        em.emitterMode = .volume
+        em.emitterSize = CGSize(width: b.w, height: b.h * 0.8)
+        em.renderMode = .additive
+        let cell = CAEmitterCell()
+        cell.contents = particleDot
+        cell.color = color
+        cell.birthRate = Float(min(1600, max(300, b.w * b.h / (base * base) * 260)))
+        cell.lifetime = 1.1
+        cell.lifetimeRange = 0.5
+        cell.velocity = base * 0.7
+        cell.velocityRange = base * 0.6
+        cell.emissionRange = .pi * 2
+        cell.yAcceleration = -base * 0.4
+        cell.scale = base * 0.07 / 32
+        cell.scaleRange = base * 0.04 / 32
+        cell.scaleSpeed = -base * 0.03 / 32
+        cell.alphaSpeed = -0.9
+        em.emitterCells = [cell]
+        setQuietly { world.addSublayer(em) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { em.birthRate = 0 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { em.removeFromSuperlayer() }
     }
 
     private func focus(_ b: Block, zoom: CGFloat, mood: Mood, instant: Bool) {

@@ -69,6 +69,7 @@ native/Sources/LyricBox/
   Flow.swift            COTODAMA canvas: block layout, camera, letter-by-letter reveal
   Constellation.swift   constellation style: stars, connecting lines, twinkling sky
   Ambient.swift         4 graphics (rings, waves, dot grid, sunburst)
+  WordZoom.swift        rap style: one word at a time
   AudioTap.swift        Spotify audio tap + beat / tempo detection
   HotKeys.swift         ⌥⌘[ / ⌥⌘]
 ```
@@ -78,7 +79,7 @@ native/Sources/LyricBox/
 The app's menus are in Vietnamese; the original labels are shown in brackets.
 
 - **Show lyrics on the desktop** (*Hiện lời trên màn hình nền*): on/off
-- **Text style** (*Kiểu chữ*): COTODAMA automatic per song / calm / medium / energetic / constellation (*Chòm sao*)
+- **Text style** (*Kiểu chữ*): COTODAMA automatic per song / calm / medium / energetic / constellation (*Chòm sao*) / rap / glitch
 - **Font** (*Phông chữ*): Noto Serif / Sans (as COTODAMA uses for Latin and Vietnamese) or the system fonts
 - **Follow the beat** (*Theo nhịp nhạc*): off / soft (text and glow pulse on the beat) / strong (plus the line bouncing); optional flash on strong beats of energetic songs; shows the detected BPM
 - **Background** (*Nền*): Dark · Light (clear acrylic) · Transparent with white text · Transparent with black text (keeps your own wallpaper)
@@ -96,6 +97,12 @@ The app's menus are in Vietnamese; the original labels are shown in brackets.
 - **Constellation** (*Chòm sao*), in 3D: every word is a star at its own depth, so near words look bigger. The line's stars first show faintly so you see the shape; as each word is sung its star lights up, a line grows to it through 3D space from the previous star, and the letters are spelled out beside it. The whole sky slowly sways as if dragged by a finger, so near words move more than far ones (parallax), while every word keeps facing you. New constellations come out of the distance; older ones recede and dim. In automatic mode about half of the calm songs use it.
 - Songs without lyrics: a typographic "poster" of title → artist → album (changing every 8 s) over moving graphics (rings, waves, dot grid, sunburst; one per song). Instrumental breaks in songs with lyrics show these graphics too.
 
-- **On the beat:** the text and a soft glow pulse, the current line bounces (strong mode), the background graphics swell, and energetic songs can flash on strong beats (off by default).
+- **Rap:** one huge word at a time in the middle, punching in as it's sung while the previous one zooms past, with the whole line in small type underneath. Automatic mode uses it when the singing is very dense.
+- **Glitch** (rock / electronic): words twitch, flicker and split into a coloured ghost as they appear and on strong beats.
+- **Energetic extras:** blocks tilt and spin in; when a line ends it bursts into glowing particles.
+- **Medium:** a new line appears blurred and snaps into focus on the next beat.
+- **Chorus:** lines that come back during the song are treated as the chorus: bigger emphasis, more zoom, stronger beat effects, and a hit (flash + pulse) when it starts.
+- **Mood from the audio:** once the tempo is stable, fast songs (≥128 BPM) move one mood up and slow ones (≤82 BPM) one down. Automatic mode also uses the constellation for half of the calm songs and glitch for a third of the energetic ones.
+- **On the beat:** the text and a soft glow pulse, the current line hops with a squash-and-stretch (strong mode), the background graphics swell, and energetic songs can flash on strong beats (off by default).
 
 `legacy-web/` is the first browser-based player (with playback controls, audio/LRC file loading and 7 text styles), kept for reference.
