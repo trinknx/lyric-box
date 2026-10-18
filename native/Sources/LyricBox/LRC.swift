@@ -42,7 +42,8 @@ enum LRC {
             let plain = text.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
             guard !plain.isEmpty else { return [] }
             let dur = duration > 0 ? duration : Double(plain.count) * 4
-            let start = min(5, dur * 0.05), step = (dur - start) / Double(plain.count)
+            // no timestamps: spread over the sung part (skip ~8% intro and outro)
+            let start = min(15, dur * 0.08), step = (dur * 0.92 - start) / Double(plain.count)
             raw = plain.enumerated().map { (start + Double($0.offset) * step, $0.element) }
         }
         return raw.enumerated().map { i, r in

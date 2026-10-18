@@ -151,10 +151,12 @@ final class LyricScene {
         updateCaption()
     }
 
-    func setLyrics(_ lrc: String?, for id: String, duration: Double) {
+    /// `soft` swaps the timing without redrawing (used while syncing by hand).
+    func setLyrics(_ lrc: String?, for id: String, duration: Double, soft: Bool = false) {
         guard id == trackId else { return }
         lines = lrc.map { LRC.lines(from: $0, duration: duration) } ?? []
         noLyrics = lines.isEmpty
+        if soft { return }
         findChorus()
         pickMood()
         reset()

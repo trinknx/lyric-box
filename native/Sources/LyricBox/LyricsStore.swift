@@ -29,12 +29,19 @@ final class LyricsStore {
         }
     }
 
+    /// True when the text has `[mm:ss]` timestamps.
+    static func isSynced(_ s: String) -> Bool {
+        s.range(of: #"\[\d{1,3}:\d{2}"#, options: .regularExpression) != nil
+    }
+
+    /// Synced lyrics if any source has them, otherwise plain text (only synced lyrics are cached,
+    /// so a song gets picked up again once LRCLIB gains timestamps for it).
     func lyrics(for t: Track, refresh: Bool = false, completion: @escaping (String?) -> Void) {
         if !refresh, let lrc = cache[key(t)] { return completion(lrc) }
         Task {
             let lrc = await Self.fetch(t)
             await MainActor.run {
-                if let lrc { self.set(t, lrc) }
+                if let lrc, Self.isSynced(lrc) { self.set(t, lrc) }
                 completion(lrc)
             }
         }
@@ -50,13 +57,29 @@ final class LyricsStore {
         return try? JSONSerialization.jsonObject(with: data)
     }
 
+    /// Letters and digits only, no accents ("Lệ Quyên" → "lequyen").
+    private static func fold(_ s: String) -> String {
+        let f = s.replacingOccurrences(of: "đ", with: "d").replacingOccurrences(of: "Đ", with: "D")
+            .folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: nil)
+        return String(f.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) })
+    }
+
+    /// A search hit is the same song: names match (ignoring accents / extras) and the length is close.
+    private static func same(_ item: [String: Any], _ name: String, _ duration: Double) -> Bool {
+        let a = fold(item["trackName"] as? String ?? ""), b = fold(name)
+        guard !a.isEmpty, !b.isEmpty, a.contains(b) || b.contains(a) else { return false }
+        return abs((item["duration"] as? Double ?? 0) - duration) < 6
+    }
+
     private static func fetch(_ t: Track) async -> String? {
         let artist = t.artist.components(separatedBy: CharacterSet(charactersIn: ",&")).first?
             .components(separatedBy: " feat").first?.trimmingCharacters(in: .whitespaces) ?? t.artist
         var params = ["track_name": t.name, "artist_name": artist, "duration": String(Int(t.duration.rounded()))]
         if !t.album.isEmpty { params["album_name"] = t.album }
-        if let exact = await get("get", params) as? [String: Any], let lrc = exact["syncedLyrics"] as? String, !lrc.isEmpty {
-            return lrc
+        var plain: String?
+        if let exact = await get("get", params) as? [String: Any] {
+            if let lrc = exact["syncedLyrics"] as? String, !lrc.isEmpty { return lrc }
+            plain = exact["plainLyrics"] as? String
         }
         // "Song - Remastered 2011", "Song (feat. X)"… often miss: search loosely
         let clean = t.name.replacingOccurrences(
@@ -64,13 +87,16 @@ final class LyricsStore {
             options: [.regularExpression, .caseInsensitive]).trimmingCharacters(in: .whitespaces)
         for q in [["track_name": clean, "artist_name": artist], ["q": "\(artist) \(clean)"]] {
             guard let items = await get("search", q) as? [[String: Any]] else { continue }
-            let best = items
-                .filter { ($0["syncedLyrics"] as? String)?.isEmpty == false }
-                .min { abs(($0["duration"] as? Double ?? 0) - t.duration) < abs(($1["duration"] as? Double ?? 0) - t.duration) }
-            if let best, abs((best["duration"] as? Double ?? 0) - t.duration) < 6 {
-                return best["syncedLyrics"] as? String
+            let matches = items.filter { same($0, clean, t.duration) }
+                .sorted { abs(($0["duration"] as? Double ?? 0) - t.duration) < abs(($1["duration"] as? Double ?? 0) - t.duration) }
+            if let lrc = matches.lazy.compactMap({ $0["syncedLyrics"] as? String }).first(where: { !$0.isEmpty }) {
+                return lrc
+            }
+            // remember plain text from the same song in case nothing synced turns up
+            if plain == nil {
+                plain = matches.lazy.compactMap { $0["plainLyrics"] as? String }.first { !$0.isEmpty }
             }
         }
-        return nil
+        return plain.flatMap { $0.isEmpty ? nil : $0 }
     }
 }

@@ -5,7 +5,7 @@
 A macOS app that turns your desktop into a **COTODAMA Lyric Speaker**-style lyric display: when you play music in **Spotify** (the desktop app), synced lyrics appear as kinetic typography right on your desktop, behind all your windows.
 
 - No Spotify login: the app reads what's playing from the Spotify app on your Mac.
-- Synced lyrics come from [LRCLIB](https://lrclib.net) and are cached.
+- Synced lyrics come from [LRCLIB](https://lrclib.net) and are cached. If LRCLIB only has plain text for a song, it's shown paced evenly across the song and can be synced by hand once (`⌥⌘L`). Spotify's own lyrics come from Musixmatch and aren't freely available, so some songs have lyrics in Spotify but not here.
 - Lives in the menu bar only, with no on-screen controls.
 - Playing → lyrics fade in. Paused or stopped → they fade out and your normal wallpaper comes back.
 
@@ -86,6 +86,7 @@ The app's menus are in Vietnamese; the original labels are shown in brackets.
 - **Screen** (*Màn hình*): main screen, a specific screen, or all screens
 - **Lyric offset** (*Lệch lời*): `⌥⌘]` earlier · `⌥⌘[` later (0.25 s per step)
 - **Search lyrics again** (*Tìm lại lời bài này*) / **Pick an .lrc file for this song…** (*Chọn file .lrc cho bài này…*) when LRCLIB has wrong lyrics or none
+- **Sync lyrics by hand** (*Đồng bộ lời bằng tay*, `⌥⌘L`): when only plain (unsynced) lyrics exist, press `⌥⌘L` at the start of each line while listening; after the last line the timing is saved and the song is synced from then on
 - **Open at login** (*Mở cùng macOS*)
 
 ## Effects (COTODAMA-style)
