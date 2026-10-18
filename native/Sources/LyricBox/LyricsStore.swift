@@ -34,8 +34,7 @@ final class LyricsStore {
         s.range(of: #"\[\d{1,3}:\d{2}"#, options: .regularExpression) != nil
     }
 
-    /// Synced lyrics if any source has them, otherwise plain text (only synced lyrics are cached,
-    /// so a song gets picked up again once LRCLIB gains timestamps for it).
+    /// Synced lyrics for a track, or nil (only lyrics with timestamps are used: they follow Spotify).
     /// `complete` is false when LRCLIB failed along the way (busy / offline), so a synced
     /// version may still exist and it's worth asking again later.
     func lyrics(for t: Track, refresh: Bool = false, completion: @escaping (_ lrc: String?, _ complete: Bool) -> Void) {
@@ -88,12 +87,10 @@ final class LyricsStore {
             .components(separatedBy: " feat").first?.trimmingCharacters(in: .whitespaces) ?? t.artist
         var params = ["track_name": t.name, "artist_name": artist, "duration": String(Int(t.duration.rounded()))]
         if !t.album.isEmpty { params["album_name"] = t.album }
-        var plain: String?
         let (exactJSON, exactOK) = await get("get", params)
         complete = complete && exactOK
-        if let exact = exactJSON as? [String: Any] {
-            if let lrc = exact["syncedLyrics"] as? String, !lrc.isEmpty { return (lrc, true) }
-            plain = exact["plainLyrics"] as? String
+        if let exact = exactJSON as? [String: Any], let lrc = exact["syncedLyrics"] as? String, !lrc.isEmpty {
+            return (lrc, true)
         }
         // "Song - Remastered 2011", "Song (feat. X)"… often miss: search loosely
         let clean = t.name.replacingOccurrences(
@@ -108,11 +105,7 @@ final class LyricsStore {
             if let lrc = matches.lazy.compactMap({ $0["syncedLyrics"] as? String }).first(where: { !$0.isEmpty }) {
                 return (lrc, true)
             }
-            // remember plain text from the same song in case nothing synced turns up
-            if plain == nil {
-                plain = matches.lazy.compactMap { $0["plainLyrics"] as? String }.first { !$0.isEmpty }
-            }
         }
-        return (plain.flatMap { $0.isEmpty ? nil : $0 }, complete)
+        return (nil, complete)
     }
 }

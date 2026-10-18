@@ -2,7 +2,6 @@ import AppKit
 import Carbon
 import Metal
 import ServiceManagement
-import UniformTypeIdentifiers
 
 extension NSScreen {
     var displayID: CGDirectDisplayID {
@@ -64,30 +63,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var timer: Timer?
     private var pauseWork: DispatchWorkItem?
-    private var lyricsStatus = ""                 // "", loading, found, plain, missing
+    private var lyricsStatus = ""                 // "", loading, found, missing
 
-    /// Syncing plain lyrics by hand: ⌥⌘L at the start of each line.
-    private struct HandSync {
-        let trackId: String
-        let texts: [String]
-        var times: [Double] = []
-
-        static func stamp(_ t: Double) -> String {
-            String(format: "[%02d:%05.2f]", Int(t) / 60, t.truncatingRemainder(dividingBy: 60))
-        }
-        /// Tapped lines at their real times; the rest estimated from the pace so far.
-        func lrc(estimating: Bool) -> String {
-            var out = zip(times, texts).map { Self.stamp($0) + $1 }
-            if estimating, let last = times.last, times.count < texts.count {
-                let gap = times.count > 1 ? max(1.5, (last - times[0]) / Double(times.count - 1)) : 4
-                for j in times.count..<texts.count { out.append(Self.stamp(last + gap * Double(j - times.count + 1)) + texts[j]) }
-            } else if let last = times.last {
-                out.append(Self.stamp(last + 6))
-            }
-            return out.joined(separator: "\n")
-        }
-    }
-    private var handSync: HandSync?
     private var lyrics: (id: String, lrc: String?)?
 
     // LYRICBOX_PREVIEW=1 (or =nolyrics) → fake song, for testing without Spotify
@@ -127,7 +104,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         HotKeys.install()
         HotKeys.register(id: 1, keyCode: kVK_ANSI_RightBracket, modifiers: cmdKey | optionKey) { [weak self] in self?.settings.offset += 0.25 }
         HotKeys.register(id: 2, keyCode: kVK_ANSI_LeftBracket, modifiers: cmdKey | optionKey) { [weak self] in self?.settings.offset -= 0.25 }
-        HotKeys.register(id: 3, keyCode: kVK_ANSI_L, modifiers: cmdKey | optionKey) { [weak self] in self?.syncTap() }
 
         if let preview {
             startPreview(noLyrics: preview == "nolyrics")
@@ -255,7 +231,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func trackChanged(_ t: Track?) {
-        handSync = nil
         lyricsRetries = 0
         lyricsIncomplete = false
         lyrics = nil
@@ -279,7 +254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if !complete && self.lyricsRetries < 3 {
                 self.lyricsRetries += 1
                 DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
-                    guard let self, self.track?.id == t.id, self.handSync == nil else { return }
+                    guard let self, self.track?.id == t.id else { return }
                     self.loadLyrics(t, refresh: true)
                 }
             }
@@ -288,34 +263,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func applyLyrics(_ lrc: String?, for t: Track) {
         lyrics = (t.id, lrc)
-        lyricsStatus = lrc == nil ? "missing" : LyricsStore.isSynced(lrc!) ? "found" : "plain"
+        lyricsStatus = lrc == nil ? "missing" : "found"
         scenes.forEach { $0.setLyrics(lrc, for: t.id, duration: t.duration) }
-    }
-
-    /// ⌥⌘L: the next line starts now. After the last line the timing is saved as synced lyrics.
-    private func syncTap() {
-        guard let t = track, let lrc = lyrics?.lrc, lyrics?.id == t.id else { NSSound.beep(); return }
-        if handSync?.trackId != t.id {
-            let texts = LRC.lines(from: lrc, duration: t.duration).map { $0.text }.filter { !$0.isEmpty }
-            guard !texts.isEmpty else { NSSound.beep(); return }
-            handSync = HandSync(trackId: t.id, texts: texts)
-        }
-        guard var s = handSync else { return }
-        s.times.append(max(0, position))
-        handSync = s
-        let done = s.times.count >= s.texts.count
-        let out = s.lrc(estimating: !done)
-        scenes.forEach { $0.setLyrics(out, for: t.id, duration: t.duration, soft: true) }
-        if done {
-            store.set(t, out)
-            handSync = nil
-            applyLyrics(out, for: t)
-        }
-    }
-
-    private func cancelHandSync() {
-        handSync = nil
-        if let t = track, let lyrics, lyrics.id == t.id { applyLyrics(lyrics.lrc, for: t) }
     }
 
     private func startPreview(noLyrics: Bool) {
@@ -424,14 +373,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let info = NSMenuItem(title: statusText(), action: nil, keyEquivalent: "")
         info.isEnabled = false
         menu.addItem(info)
-        if let s = handSync, s.trackId == track?.id {
-            let l = NSMenuItem(title: "Đang đồng bộ: câu \(s.times.count)/\(s.texts.count) — ⌥⌘L cho câu tiếp", action: nil, keyEquivalent: "")
-            l.isEnabled = false
-            menu.addItem(l)
-            menu.addItem(ActionItem("Hủy đồng bộ bằng tay") { [weak self] in self?.cancelHandSync() })
-        } else if track != nil, let text = ["loading": "Đang tìm lời…", "found": "Đã có lời đồng bộ",
-                                            "plain": "Lời chưa đồng bộ — bấm ⌥⌘L ở đầu mỗi câu để đồng bộ",
-                                            "missing": "Không tìm thấy lời"][lyricsStatus] {
+        if track != nil, let text = ["loading": "Đang tìm lời…", "found": "Đã có lời đồng bộ",
+                                     "missing": "Chưa có lời đồng bộ cho bài này"][lyricsStatus] {
             let l = NSMenuItem(title: text, action: nil, keyEquivalent: "")
             l.isEnabled = false
             menu.addItem(l)
@@ -508,8 +451,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(ActionItem("Tìm lại lời bài này", enabled: has) { [weak self] in
             if let self, let t = self.track { self.loadLyrics(t, refresh: true) }
         })
-        menu.addItem(ActionItem("Chọn file .lrc cho bài này…", enabled: has) { [weak self] in self?.pickLrc() })
-        menu.addItem(ActionItem("Đồng bộ lời bằng tay   ⌥⌘L", enabled: has && lyrics?.lrc != nil) { [weak self] in self?.syncTap() })
         menu.addItem(.separator())
         let login = SMAppService.mainApp
         menu.addItem(ActionItem("Mở cùng macOS", checked: login.status == .enabled) {
@@ -522,18 +463,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         item.submenu = sub
         return item
-    }
-
-    private func pickLrc() {
-        guard let t = track else { return }
-        NSApp.activate(ignoringOtherApps: true)
-        let panel = NSOpenPanel()
-        panel.title = "Chọn file lời cho “\(t.name)”"
-        panel.allowedContentTypes = [UTType(filenameExtension: "lrc") ?? .plainText, .plainText]
-        guard panel.runModal() == .OK, let url = panel.url,
-              let lrc = try? String(contentsOf: url, encoding: .utf8) else { return }
-        store.set(t, lrc)
-        applyLyrics(lrc, for: t)
     }
 
     /// Crescent, like the COTODAMA mark.

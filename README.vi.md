@@ -5,7 +5,7 @@
 App cho macOS biến màn hình nền thành màn hiển thị lời bài hát kiểu **COTODAMA Lyric Speaker**: khi bạn phát nhạc trên **Spotify** (app desktop), lời đồng bộ tự hiện bằng chữ chuyển động ngay trên desktop, nằm dưới mọi cửa sổ.
 
 - Không cần đăng nhập Spotify: app đọc bài đang phát từ app Spotify trên máy.
-- Lời đồng bộ lấy từ [LRCLIB](https://lrclib.net) và lưu cache. Nếu LRCLIB chỉ có lời dạng chữ, app hiện chia đều theo bài và bạn có thể đồng bộ bằng tay một lần (`⌥⌘L`). Lời trên Spotify lấy từ Musixmatch (không miễn phí), nên có bài Spotify có lời mà ở đây không có.
+- Lời đồng bộ lấy từ [LRCLIB](https://lrclib.net) và lưu cache, tự chạy theo Spotify. Bài nào LRCLIB chưa có lời đồng bộ thì hiện tên bài và đồ họa động. (Lời trên Spotify lấy từ Musixmatch, không miễn phí, nên có bài Spotify có lời mà ở đây không có.)
 - Chỉ có icon trên thanh menu, không có giao diện điều khiển.
 - Đang phát → lời hiện dần. Tạm dừng/tắt nhạc → mờ đi, trả lại hình nền gốc.
 
@@ -83,8 +83,7 @@ native/Sources/LyricBox/
 - **Nền**: Tối · Sáng (acrylic trong) · Trong suốt chữ trắng · Trong suốt chữ đen (giữ hình nền của bạn)
 - **Màn hình**: màn hình chính, chọn màn hình, hoặc tất cả
 - **Lệch lời**: `⌥⌘]` lời sớm hơn · `⌥⌘[` lời trễ hơn (0.25s mỗi lần)
-- **Tìm lại lời** / **Chọn file .lrc cho bài này…** khi LRCLIB không có hoặc sai lời
-- **Đồng bộ lời bằng tay** (`⌥⌘L`): khi chỉ có lời chưa đồng bộ, bấm `⌥⌘L` ở đầu mỗi câu trong lúc nghe; hết câu cuối thì thời gian được lưu, từ lần sau bài đó đã đồng bộ
+- **Tìm lại lời** khi lời bị sai hoặc LRCLIB đang quá tải
 - **Mở cùng macOS**
 
 ## Hiệu ứng (mô phỏng COTODAMA)
