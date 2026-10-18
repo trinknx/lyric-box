@@ -42,7 +42,50 @@ struct Mood {
     }
 }
 
+/// Bundled Noto fonts (OFL), the family COTODAMA uses for Latin / Vietnamese lyrics.
+enum Fonts {
+    static var useNoto = true
+    private static var registered = false
+
+    /// Registers the variable fonts shipped in Contents/Resources/Fonts (or native/Resources/Fonts when run from .build).
+    static func register() {
+        guard !registered else { return }
+        registered = true
+        let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath().deletingLastPathComponent()
+        let candidates = [Bundle.main.resourceURL?.appendingPathComponent("Fonts"),
+                          exe.appendingPathComponent("../../../Resources/Fonts").standardizedFileURL]
+        guard let dir = candidates.compactMap({ $0 }).first(where: { FileManager.default.fileExists(atPath: $0.path) }),
+              let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
+        for f in files where f.pathExtension == "ttf" {
+            CTFontManagerRegisterFontsForURL(f as CFURL, .process, nil)
+        }
+    }
+
+    private static let wght = NSNumber(value: 0x7767_6874) // 'wght'
+    private static let wdth = NSNumber(value: 0x7764_7468) // 'wdth'
+
+    /// Noto at a given weight / width, falling back to Hiragino for Japanese.
+    static func noto(_ family: String, size: CGFloat, weight: Double, width: Double = 100, japanese: String) -> NSFont? {
+        let d = NSFontDescriptor(fontAttributes: [
+            .family: family,
+            .variation: [wght: weight, wdth: width],
+            .cascadeList: [NSFontDescriptor(name: japanese, size: size)],
+        ])
+        guard let f = NSFont(descriptor: d, size: size), f.familyName == family else { return nil }
+        return f
+    }
+}
+
 func makeFont(_ kind: FontKind, size: CGFloat, bold: Bool) -> NSFont {
+    if Fonts.useNoto {
+        let f: NSFont?
+        switch kind {
+        case .serif: f = Fonts.noto("Noto Serif", size: size, weight: bold ? 700 : 400, japanese: bold ? "HiraMinProN-W6" : "HiraMinProN-W3")
+        case .sans: f = Fonts.noto("Noto Sans", size: size, weight: 800, japanese: "HiraginoSans-W7")
+        case .impact: f = Fonts.noto("Noto Sans", size: size, weight: 900, width: 62.5, japanese: "HiraginoSans-W8")
+        }
+        if let f { return f }
+    }
     switch kind {
     case .serif: // New York
         let base = NSFont.systemFont(ofSize: size, weight: bold ? .bold : .regular)

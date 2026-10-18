@@ -9,7 +9,7 @@ A macOS app that turns your desktop into a **COTODAMA Lyric Speaker**-style lyri
 - Lives in the menu bar only, with no on-screen controls.
 - Playing → lyrics fade in. Paused or stopped → they fade out and your normal wallpaper comes back.
 
-Written in Swift + Core Animation: 844 KB app (568 KB dmg), ~50 MB RAM, ~0.2% CPU for the app itself, runs on Apple Silicon and Intel (macOS 13+).
+Written in Swift + Core Animation: 4.8 MB app (2.9 MB dmg, mostly the bundled fonts), ~50 MB RAM, a few % CPU at most for the app itself, runs on Apple Silicon and Intel (macOS 13+).
 
 ## Install
 
@@ -45,7 +45,7 @@ LYRICBOX_PREVIEW=1 "native/build/Lyric Box.app/Contents/MacOS/LyricBox"         
 LYRICBOX_PREVIEW=nolyrics "native/build/Lyric Box.app/Contents/MacOS/LyricBox"   # fake song without lyrics
 ```
 
-Add `LYRICBOX_SNAPSHOT=/some/dir` and the app saves 10 PNG snapshots of the lyric screen over ~40 seconds, then quits (handy for checking the look without screen-recording permission).
+Add `LYRICBOX_SNAPSHOT=/some/dir` and the app renders 10 PNG snapshots of the lyric screen offscreen (CARenderer, so 3D is included) over ~40 seconds, then quits. Handy for checking the look without screen-recording permission.
 
 **Sharing it:** the build is only ad-hoc signed, so the first launch needs **System Settings → Privacy & Security → Open Anyway** (or the `xattr` command above). To open without any warning, the app has to be signed and notarized with an Apple Developer ID.
 
@@ -53,7 +53,7 @@ Add `LYRICBOX_SNAPSHOT=/some/dir` and the app saves 10 PNG snapshots of the lyri
 
 - **Reading Spotify:** listens for the `com.spotify.client.PlaybackStateChanged` notification Spotify broadcasts on track change / play / pause, and re-reads the position every 1.5 s with an in-process AppleScript (no `osascript` process).
 - **Drawing:** every letter is a `CALayer` drawn with Core Text. The camera is 3 nested layers (rotate → zoom → pan). All motion, including the background graphics, is Core Animation run by macOS's render server; the app's own code only checks lyric timing ~20 times a second.
-- **Fonts:** New York (serif) and SF Pro (heavy / condensed), built into macOS, with full Vietnamese support.
+- **Fonts:** bundled Noto Serif and Noto Sans variable fonts (SIL Open Font License, `native/Resources/Fonts/OFL.txt`); weight and width axes give the regular, bold and condensed-black looks. Japanese falls back to Hiragino Mincho / Hiragino Sans. The system fonts (New York / SF Pro) are an alternative in the menu.
 - **Window:** one level below the desktop (`desktopWindow − 1`), on every Space, click-through.
 
 ### Layout
@@ -77,6 +77,7 @@ The app's menus are in Vietnamese; the original labels are shown in brackets.
 
 - **Show lyrics on the desktop** (*Hiện lời trên màn hình nền*): on/off
 - **Text style** (*Kiểu chữ*): COTODAMA automatic per song / calm / medium / energetic / constellation (*Chòm sao*)
+- **Font** (*Phông chữ*): Noto Serif / Sans (as COTODAMA uses for Latin and Vietnamese) or the system fonts
 - **Background** (*Nền*): Dark · Light (clear acrylic) · Transparent with white text · Transparent with black text (keeps your own wallpaper)
 - **Screen** (*Màn hình*): main screen, a specific screen, or all screens
 - **Lyric offset** (*Lệch lời*): `⌥⌘]` earlier · `⌥⌘[` later (0.25 s per step)
@@ -89,7 +90,7 @@ The app's menus are in Vietnamese; the original labels are shown in brackets.
 - **Continuous canvas:** the previous line stays, dimmed; the camera pans, zooms and **turns 90°** to the new line.
 - Upcoming words sometimes appear faintly first, and short phrases sometimes sit in an inverted label box.
 - Mood from how fast the words come: calm (thin serif, slow) · medium · energetic (bold uppercase, fast).
-- **Constellation** (*Chòm sao*): every word is a star. The line's stars first show faintly so you see the shape; as each word is sung its star lights up, a thin line is drawn from the previous star, and the letters are spelled out beside it, over a twinkling sky. Older constellations shrink and drift away. In automatic mode about half of the calm songs use it.
+- **Constellation** (*Chòm sao*), in 3D: every word is a star at its own depth, so near words look bigger. The line's stars first show faintly so you see the shape; as each word is sung its star lights up, a line grows to it through 3D space from the previous star, and the letters are spelled out beside it. The whole sky slowly sways as if dragged by a finger, so near words move more than far ones (parallax), while every word keeps facing you. New constellations come out of the distance; older ones recede and dim. In automatic mode about half of the calm songs use it.
 - Songs without lyrics: a typographic "poster" of title → artist → album (changing every 8 s) over moving graphics (rings, waves, dot grid, sunburst; one per song). Instrumental breaks in songs with lyrics show these graphics too.
 
 Limitation: Spotify doesn't expose its audio stream, so the graphics don't follow the actual beat.

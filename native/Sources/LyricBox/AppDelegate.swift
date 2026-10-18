@@ -1,5 +1,6 @@
 import AppKit
 import Carbon
+import Metal
 import ServiceManagement
 import UniformTypeIdentifiers
 
@@ -13,7 +14,7 @@ extension NSScreen {
 final class WallpaperWindow: NSWindow {
     let scene: LyricScene
 
-    init(screen: NSScreen) {
+    init(screen: NSScreen, attach: Bool = true) {
         scene = LyricScene(size: screen.frame.size, backing: screen.backingScaleFactor)
         super.init(contentRect: screen.frame, styleMask: [.borderless], backing: .buffered, defer: false)
         level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) - 1)
@@ -25,7 +26,7 @@ final class WallpaperWindow: NSWindow {
         isReleasedWhenClosed = false
         let view = NSView(frame: CGRect(origin: .zero, size: screen.frame.size))
         view.wantsLayer = true
-        view.layer?.addSublayer(scene.root)
+        if attach { view.layer?.addSublayer(scene.root) }
         contentView = view
         setFrame(screen.frame, display: true)
         orderFrontRegardless()
@@ -84,6 +85,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         statusItem.menu = menu
 
+        Fonts.register()
+        Fonts.useNoto = settings.fontSet == .noto
         settings.onChange = { [weak self] k in self?.settingChanged(k) }
         syncWindows()
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
@@ -197,7 +200,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 w.fit(s)
                 continue
             }
-            let w = WallpaperWindow(screen: s)
+            // snapshot mode renders the scene offscreen instead (CARenderer needs it detached)
+            let w = WallpaperWindow(screen: s, attach: ProcessInfo.processInfo.environment["LYRICBOX_SNAPSHOT"] == nil)
             configure(w.scene)
             windows[s.displayID] = w
         }
@@ -221,6 +225,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "mood": scenes.forEach { $0.moodSetting = settings.mood }
         case "caption": scenes.forEach { $0.showCaption = settings.caption }
         case "offset": scenes.forEach { $0.reset() }
+        case "fontSet":
+            Fonts.useNoto = settings.fontSet == .noto
+            scenes.forEach { $0.reset() }
         default: break
         }
     }
@@ -266,6 +273,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             mood.addItem(ActionItem(m.title, checked: settings.mood == m) { [weak self] in self?.settings.mood = m })
         }
         menu.addItem(submenu("Kiểu chữ", mood))
+
+        let fonts = NSMenu()
+        for f in FontSet.allCases {
+            fonts.addItem(ActionItem(f.title, checked: settings.fontSet == f) { [weak self] in self?.settings.fontSet = f })
+        }
+        menu.addItem(submenu("Phông chữ", fonts))
 
         let theme = NSMenu()
         for t in Theme.allCases {
@@ -350,19 +363,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    private var snapRenderer: (CARenderer, MTLTexture, MTLCommandQueue)?
+
+    /// Renders the scene with CARenderer (Metal) so 3D transforms and perspective are included.
     private func snapshot(_ url: URL) {
-        guard let w = windows.values.first else { return }
-        let layer = w.scene.root.presentation() ?? w.scene.root
-        let size = w.frame.size, k: CGFloat = 0.35
-        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size.width * k), pixelsHigh: Int(size.height * k),
-                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
-              let ctx = NSGraphicsContext(bitmapImageRep: rep)?.cgContext else { return }
-        ctx.setFillColor(NSColor(red: 0.25, green: 0.3, blue: 0.4, alpha: 1).cgColor) // stand-in wallpaper
-        ctx.fill(CGRect(x: 0, y: 0, width: size.width * k, height: size.height * k))
-        ctx.translateBy(x: 0, y: size.height * k)
-        ctx.scaleBy(x: k, y: -k)
-        layer.render(in: ctx)
+        guard let w = windows.values.first, let device = MTLCreateSystemDefaultDevice() else { return }
+        let root = w.scene.root
+        let W = Int(root.bounds.width), H = Int(root.bounds.height)
+        if snapRenderer == nil {
+            let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: W, height: H, mipmapped: false)
+            desc.usage = [.shaderRead, .shaderWrite, .renderTarget]
+            desc.storageMode = .managed
+            guard let tex = device.makeTexture(descriptor: desc), let queue = device.makeCommandQueue() else { return }
+            let r = CARenderer(mtlTexture: tex, options: [kCARendererMetalCommandQueue: queue])
+            r.layer = root
+            r.bounds = root.bounds
+            snapRenderer = (r, tex, queue)
+        }
+        guard let (r, tex, queue) = snapRenderer else { return }
+        r.beginFrame(atTime: CACurrentMediaTime(), timeStamp: nil)
+        r.addUpdate(r.bounds)
+        r.render()
+        r.endFrame()
+        guard let cb = queue.makeCommandBuffer(), let blit = cb.makeBlitCommandEncoder() else { return }
+        blit.synchronize(resource: tex)
+        blit.endEncoding()
+        cb.commit()
+        cb.waitUntilCompleted()
+
+        var bytes = [UInt8](repeating: 0, count: W * H * 4)
+        tex.getBytes(&bytes, bytesPerRow: W * 4, from: MTLRegionMake2D(0, 0, W, H), mipmapLevel: 0)
+        // CARenderer's texture is bottom-up: flip rows
+        var flipped = [UInt8](repeating: 0, count: bytes.count)
+        for y in 0..<H { flipped.replaceSubrange(y * W * 4..<(y + 1) * W * 4, with: bytes[(H - 1 - y) * W * 4..<(H - y) * W * 4]) }
+        bytes = flipped
+        // composite over a stand-in wallpaper colour, BGRA → RGBA
+        for i in stride(from: 0, to: bytes.count, by: 4) {
+            let a = Double(bytes[i + 3]) / 255
+            let b = Double(bytes[i]), g = Double(bytes[i + 1]), rr = Double(bytes[i + 2])
+            bytes[i] = UInt8(min(255, rr + (1 - a) * 64))
+            bytes[i + 1] = UInt8(min(255, g + (1 - a) * 77))
+            bytes[i + 2] = UInt8(min(255, b + (1 - a) * 102))
+            bytes[i + 3] = 255
+        }
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: W, pixelsHigh: H, bitsPerSample: 8,
+                                         samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: W * 4, bitsPerPixel: 32),
+              let data = rep.bitmapData else { return }
+        bytes.withUnsafeBytes { data.update(from: $0.bindMemory(to: UInt8.self).baseAddress!, count: bytes.count) }
         try? rep.representation(using: .png, properties: [:])?.write(to: url)
     }
 }

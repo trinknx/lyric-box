@@ -9,7 +9,7 @@ App cho macOS biến màn hình nền thành màn hiển thị lời bài hát k
 - Chỉ có icon trên thanh menu, không có giao diện điều khiển.
 - Đang phát → lời hiện dần. Tạm dừng/tắt nhạc → mờ đi, trả lại hình nền gốc.
 
-Viết bằng Swift + Core Animation: app 844 KB (dmg 568 KB), ~50 MB RAM, CPU của app ~0.2%, chạy trên Apple Silicon và Intel (macOS 13+).
+Viết bằng Swift + Core Animation: app 4.8 MB (dmg 2.9 MB, phần lớn là phông chữ đi kèm), ~50 MB RAM, CPU của app tối đa vài %, chạy trên Apple Silicon và Intel (macOS 13+).
 
 ## Cài đặt
 
@@ -45,7 +45,7 @@ LYRICBOX_PREVIEW=1 "native/build/Lyric Box.app/Contents/MacOS/LyricBox"         
 LYRICBOX_PREVIEW=nolyrics "native/build/Lyric Box.app/Contents/MacOS/LyricBox"   # bài không lời
 ```
 
-Thêm `LYRICBOX_SNAPSHOT=/thư/mục` để app tự chụp 10 ảnh PNG của màn hình lời trong ~40 giây rồi thoát (kiểm tra giao diện mà không cần quyền quay màn hình).
+Thêm `LYRICBOX_SNAPSHOT=/thư/mục` để app tự vẽ 10 ảnh PNG của màn hình lời ngoài màn hình (CARenderer, có cả 3D) trong ~40 giây rồi thoát, để kiểm tra giao diện mà không cần quyền quay màn hình.
 
 **Gửi cho người khác:** bản build chỉ ký ad-hoc, nên lần đầu mở cần **System Settings → Privacy & Security → Open Anyway** (hoặc `xattr -dr com.apple.quarantine "/Applications/Lyric Box.app"`). Muốn mở thẳng không cảnh báo thì cần ký + notarize bằng Apple Developer ID.
 
@@ -53,7 +53,7 @@ Thêm `LYRICBOX_SNAPSHOT=/thư/mục` để app tự chụp 10 ảnh PNG của m
 
 - **Đọc Spotify**: lắng nghe thông báo `com.spotify.client.PlaybackStateChanged` mà Spotify phát ra khi đổi bài / phát / dừng, và cứ 1.5 giây đọc lại vị trí bằng AppleScript chạy trong app (không tạo tiến trình `osascript`).
 - **Vẽ**: mỗi chữ cái là một `CALayer` vẽ bằng Core Text. Camera là 3 layer lồng nhau (xoay → zoom → dịch). Mọi chuyển động, kể cả đồ họa nền, là animation Core Animation do render server của macOS chạy; code của app chỉ kiểm tra thời gian lời ~20 lần/giây.
-- **Phông**: New York (serif) và SF Pro (đậm / condensed) có sẵn trong macOS, hỗ trợ đủ tiếng Việt.
+- **Phông**: đi kèm Noto Serif và Noto Sans bản variable (giấy phép SIL Open Font License, `native/Resources/Fonts/OFL.txt`); trục độ đậm và độ rộng cho kiểu thường, đậm và đậm hẹp. Tiếng Nhật dùng Hiragino Mincho / Hiragino Sans. Có thể chọn phông hệ thống (New York / SF Pro) trong menu.
 - **Cửa sổ**: tầng ngay dưới desktop (`desktopWindow − 1`), ở mọi Space, click xuyên qua.
 
 ### Cấu trúc
@@ -75,6 +75,7 @@ native/Sources/LyricBox/
 
 - **Hiện lời trên màn hình nền**: bật/tắt
 - **Kiểu chữ**: COTODAMA tự động theo bài / êm dịu / vừa / sôi động / chòm sao
+- **Phông chữ**: Noto Serif / Sans (giống COTODAMA dùng cho chữ Latin và tiếng Việt) hoặc phông hệ thống
 - **Nền**: Tối · Sáng (acrylic trong) · Trong suốt chữ trắng · Trong suốt chữ đen (giữ hình nền của bạn)
 - **Màn hình**: màn hình chính, chọn màn hình, hoặc tất cả
 - **Lệch lời**: `⌥⌘]` lời sớm hơn · `⌥⌘[` lời trễ hơn (0.25s mỗi lần)
@@ -87,7 +88,7 @@ native/Sources/LyricBox/
 - **Canvas liên tục**: dòng cũ vẫn ở lại và mờ đi; camera lia, zoom, **xoay 90°** sang dòng mới.
 - Thỉnh thoảng hiện mờ chữ sắp hát, hoặc đặt cụm ngắn trong khung đảo màu.
 - Tâm trạng theo mật độ chữ: êm dịu (serif mảnh, chậm) · vừa · sôi động (in hoa đậm, nhanh).
-- **Chòm sao**: mỗi chữ là một ngôi sao. Các sao của dòng hiện mờ trước để thấy hình chòm sao; khi hát tới chữ nào, sao đó sáng lên, một đường mảnh nối từ sao trước, và chữ được gõ ra bên cạnh, trên nền trời sao lấp lánh. Chòm sao cũ thu nhỏ và trôi đi. Ở chế độ tự động, khoảng một nửa số bài êm dịu dùng kiểu này.
+- **Chòm sao** (3D): mỗi chữ là một ngôi sao ở một độ sâu riêng, chữ gần to, chữ xa nhỏ. Các sao của dòng hiện mờ trước để thấy hình chòm sao; khi hát tới chữ nào, sao đó sáng lên, một đường nối mọc ra từ sao trước xuyên qua không gian 3D, và chữ được gõ ra bên cạnh. Cả bầu trời đung đưa chậm như đang được kéo bằng tay, chữ gần di chuyển nhiều hơn chữ xa (thị sai), còn chữ luôn quay mặt về phía bạn. Chòm sao mới bay ra từ xa, chòm cũ lùi sâu và mờ đi. Ở chế độ tự động, khoảng một nửa số bài êm dịu dùng kiểu này.
 - Bài không có lời: "poster" chữ từ tên bài → ca sĩ → album (đổi mỗi 8s) trên nền đồ họa động (vòng sóng, dải sóng, lưới chấm, tia sáng; mỗi bài một kiểu). Đoạn nhạc dạo giữa bài cũng hiện đồ họa này.
 
 Giới hạn: Spotify không cho truy cập luồng âm thanh, nên đồ họa không theo nhịp thật.

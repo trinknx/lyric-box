@@ -67,6 +67,17 @@ enum MoodSetting: String, CaseIterable {
     }
 }
 
+enum FontSet: String, CaseIterable {
+    case noto, system
+
+    var title: String {
+        switch self {
+        case .noto: return "Noto Serif / Sans (giống COTODAMA)"
+        case .system: return "Hệ thống (New York / SF)"
+        }
+    }
+}
+
 final class Settings {
     static let shared = Settings()
     private let d = UserDefaults.standard
@@ -93,6 +104,10 @@ final class Settings {
     var display: String {
         get { d.string(forKey: "display") ?? "primary" }
         set { set(newValue, "display") }
+    }
+    var fontSet: FontSet {
+        get { FontSet(rawValue: d.string(forKey: "fontSet") ?? "") ?? .noto }
+        set { set(newValue.rawValue, "fontSet") }
     }
     var caption: Bool {
         get { d.object(forKey: "caption") as? Bool ?? true }
