@@ -54,7 +54,7 @@ Add `LYRICBOX_SNAPSHOT=/some/dir` and the app renders 10 PNG snapshots of the ly
 - **Reading Spotify:** listens for the `com.spotify.client.PlaybackStateChanged` notification Spotify broadcasts on track change / play / pause, and re-reads the position every 1.5 s with an in-process AppleScript (no `osascript` process).
 - **Drawing:** every letter is a `CALayer` drawn with Core Text. The camera is 3 nested layers (rotate → zoom → pan). All motion, including the background graphics, is Core Animation run by macOS's render server; the app's own code only checks lyric timing ~20 times a second.
 - **Fonts:** bundled Noto Serif and Noto Sans variable fonts (SIL Open Font License, `native/Resources/Fonts/OFL.txt`); weight and width axes give the regular, bold and condensed-black looks. Japanese falls back to Hiragino Mincho / Hiragino Sans. The system fonts (New York / SF Pro) are an alternative in the menu.
-- **Window:** one level below the desktop (`desktopWindow − 1`), on every Space, click-through.
+- **Window:** one level below the desktop (`desktopWindow − 1`), on every Space, click-through. Screen-saver mode uses separate windows at the screen-saver level; it's built into the app rather than being a `.saver` bundle, because macOS runs those in a sandboxed host that can't talk to Spotify.
 - **Beat sync** (macOS 14.2+): a Core Audio process tap listens to Spotify's processes only, through a private aggregate device. The samples are reduced on the audio thread to a bass-energy envelope; a beat is a sharp jump above its recent average, and the tempo comes from autocorrelating the onset envelope over the last ~6 s (shown only once it's stable). Beats are delivered delayed by the output device latency, so the effect lands when you hear it. Nothing is recorded or stored. This needs the "audio from other apps" permission, which macOS asks for the first time.
 
 ### Layout
@@ -71,6 +71,7 @@ native/Sources/LyricBox/
   Ambient.swift         4 graphics (rings, waves, dot grid, sunburst)
   WordZoom.swift        rap style: one word at a time
   AudioTap.swift        Spotify audio tap + beat / tempo detection
+  Saver.swift           screen-saver mode
   HotKeys.swift         ⌥⌘[ / ⌥⌘]
 ```
 
@@ -86,6 +87,7 @@ The app's menus are in Vietnamese; the original labels are shown in brackets.
 - **Screen** (*Màn hình*): main screen, a specific screen, or all screens
 - **Lyric offset** (*Lệch lời*): `⌥⌘]` earlier · `⌥⌘[` later (0.25 s per step)
 - **Search lyrics again** (*Tìm lại lời bài này*) when the lyrics were wrong or LRCLIB was busy
+- **Screen saver** (*Bảo vệ màn hình*): off / after 2, 5 or 10 minutes without input; *only while Spotify plays* (on by default); *preview now*. The lyrics then cover every screen in front of all windows; moving the mouse or pressing a key brings the desktop back (the key isn't passed to the app underneath). While it shows and music plays, the display is kept awake. Transparent backgrounds switch to the dark one here.
 - **Open at login** (*Mở cùng macOS*)
 
 ## Effects (COTODAMA-style)

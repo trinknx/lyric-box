@@ -60,6 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let spotify = SpotifyMonitor()
     private let store = LyricsStore()
     private var windows: [CGDirectDisplayID: WallpaperWindow] = [:]
+    private let saver = SaverController()
     private var statusItem: NSStatusItem!
     private var timer: Timer?
     private var pauseWork: DispatchWorkItem?
@@ -123,22 +124,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             spotify.start()
         }
 
+        saver.configure = { [weak self] scene in
+            guard let self else { return }
+            self.configure(scene)
+            scene.theme = self.saverTheme(self.settings.theme)
+            scene.setActive(true)
+        }
+
         let t = Timer(timeInterval: 0.05, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(t, forMode: .common)
         timer = t
 
         if let dir = ProcessInfo.processInfo.environment["LYRICBOX_SNAPSHOT"] { scheduleSnapshots(dir) }
+        // debug: LYRICBOX_SAVER_NOW=1 opens the screen saver right away
+        if ProcessInfo.processInfo.environment["LYRICBOX_SAVER_NOW"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.saver.show() }
+        }
     }
 
     // MARK: playback → scenes
 
-    private var scenes: [LyricScene] { windows.values.map { $0.scene } }
+    private var wallScenes: [LyricScene] { windows.values.map { $0.scene } }
+    private var scenes: [LyricScene] { wallScenes + saver.scenes }
+
+    /// The screen saver covers your apps, so it needs an opaque background.
+    private func saverTheme(_ t: Theme) -> Theme { t == .glassLight || t == .glassDark ? .night : t }
 
     private func tick() {
         let t = position + settings.offset
         let p = playing
         for s in scenes { s.tick(time: t, playing: p) }
         watchTap()
+        if preview == nil || saver.showing {
+            saver.update(idleMinutes: settings.saverIdle, onlyWhilePlaying: settings.saverOnlyPlaying, playing: p)
+        }
     }
 
     // MARK: beat tap
@@ -224,7 +243,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             scenes.forEach { $0.setActive(true) }
         } else {
             // keep lyrics up briefly so a quick pause doesn't flash the wallpaper
-            let w = DispatchWorkItem { [weak self] in self?.scenes.forEach { $0.setActive(false) } }
+            // the screen saver keeps showing title / graphics; only the wallpaper fades away
+            let w = DispatchWorkItem { [weak self] in self?.wallScenes.forEach { $0.setActive(false) } }
             pauseWork = w
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: w)
         }
@@ -337,7 +357,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "enabled", "display":
             syncWindows()
             updateTap()
-        case "theme": scenes.forEach { $0.theme = settings.theme }
+        case "theme":
+            wallScenes.forEach { $0.theme = settings.theme }
+            saver.scenes.forEach { $0.theme = saverTheme(settings.theme) }
         case "mood": scenes.forEach { $0.moodSetting = settings.mood }
         case "caption": scenes.forEach { $0.showCaption = settings.caption }
         case "offset": scenes.forEach { $0.reset() }
@@ -419,6 +441,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture")!)
         })
         menu.addItem(submenu("Theo nhịp nhạc", beat))
+
+        let sv = NSMenu()
+        for (title, minutes) in [("Tắt", 0), ("Sau 2 phút không dùng máy", 2), ("Sau 5 phút không dùng máy", 5), ("Sau 10 phút không dùng máy", 10)] {
+            sv.addItem(ActionItem(title, checked: settings.saverIdle == minutes) { [weak self] in self?.settings.saverIdle = minutes })
+        }
+        sv.addItem(.separator())
+        sv.addItem(ActionItem("Chỉ khi Spotify đang phát", checked: settings.saverOnlyPlaying) { [weak self] in self?.settings.saverOnlyPlaying.toggle() })
+        sv.addItem(ActionItem("Xem thử ngay") { [weak self] in
+            // a moment later, so the menu has closed
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.saver.show() }
+        })
+        menu.addItem(submenu("Bảo vệ màn hình", sv))
 
         let theme = NSMenu()
         for t in Theme.allCases {

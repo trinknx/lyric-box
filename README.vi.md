@@ -71,6 +71,7 @@ native/Sources/LyricBox/
   Ambient.swift         4 kiểu đồ họa (vòng sóng, dải sóng, lưới chấm, tia sáng)
   WordZoom.swift        kiểu rap: từng chữ một
   AudioTap.swift        nghe âm thanh Spotify, phát hiện nhịp / tempo
+  Saver.swift           chế độ bảo vệ màn hình
   HotKeys.swift         ⌥⌘[ / ⌥⌘]
 ```
 
@@ -84,6 +85,7 @@ native/Sources/LyricBox/
 - **Màn hình**: màn hình chính, chọn màn hình, hoặc tất cả
 - **Lệch lời**: `⌥⌘]` lời sớm hơn · `⌥⌘[` lời trễ hơn (0.25s mỗi lần)
 - **Tìm lại lời** khi lời bị sai hoặc LRCLIB đang quá tải
+- **Bảo vệ màn hình**: tắt / sau 2, 5 hoặc 10 phút không dùng máy; *chỉ khi Spotify đang phát* (mặc định bật); *xem thử ngay*. Lời sẽ phủ mọi màn hình, nằm trên tất cả cửa sổ; di chuột hoặc bấm phím là trở lại (phím không bị gõ vào ứng dụng bên dưới). Trong lúc hiện và đang phát nhạc, màn hình được giữ sáng. Nền trong suốt sẽ chuyển sang nền tối ở chế độ này.
 - **Mở cùng macOS**
 
 ## Hiệu ứng (mô phỏng COTODAMA)

@@ -132,6 +132,15 @@ final class Settings {
         get { d.bool(forKey: "strobe") }
         set { set(newValue, "strobe") }
     }
+    /// Screen-saver mode: minutes without input before the lyrics cover the screen (0 = off).
+    var saverIdle: Int {
+        get { d.integer(forKey: "saverIdle") }
+        set { set(newValue, "saverIdle") }
+    }
+    var saverOnlyPlaying: Bool {
+        get { d.object(forKey: "saverOnlyPlaying") as? Bool ?? true }
+        set { set(newValue, "saverOnlyPlaying") }
+    }
     var caption: Bool {
         get { d.object(forKey: "caption") as? Bool ?? true }
         set { set(newValue, "caption") }
