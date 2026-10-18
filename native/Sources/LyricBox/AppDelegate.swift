@@ -256,6 +256,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func trackChanged(_ t: Track?) {
         handSync = nil
+        lyricsRetries = 0
+        lyricsIncomplete = false
         lyrics = nil
         lyricsStatus = t == nil ? "" : "loading"
         scenes.forEach { $0.setTrack(t) }
@@ -263,11 +265,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         loadLyrics(t, refresh: false)
     }
 
+    private var lyricsRetries = 0
+    private var lyricsIncomplete = false
+
     private func loadLyrics(_ t: Track, refresh: Bool) {
-        lyricsStatus = "loading"
-        store.lyrics(for: t, refresh: refresh) { [weak self] lrc in
+        if lyrics?.id != t.id { lyricsStatus = "loading" }
+        store.lyrics(for: t, refresh: refresh) { [weak self] lrc, complete in
             guard let self, self.track?.id == t.id else { return }
-            self.applyLyrics(lrc, for: t)
+            // keep showing what we had if a retry came back with less
+            if lrc == nil, self.lyrics?.id == t.id, self.lyrics?.lrc != nil {} else { self.applyLyrics(lrc, for: t) }
+            self.lyricsIncomplete = !complete
+            // LRCLIB was busy: a synced version may exist, ask again in a bit
+            if !complete && self.lyricsRetries < 3 {
+                self.lyricsRetries += 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
+                    guard let self, self.track?.id == t.id, self.handSync == nil else { return }
+                    self.loadLyrics(t, refresh: true)
+                }
+            }
         }
     }
 
@@ -420,6 +435,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let l = NSMenuItem(title: text, action: nil, keyEquivalent: "")
             l.isEnabled = false
             menu.addItem(l)
+            if lyricsIncomplete && lyricsStatus != "found" {
+                let w = NSMenuItem(title: lyricsRetries < 3 ? "LRCLIB đang quá tải — sẽ tự tìm lại" : "LRCLIB đang quá tải — thử “Tìm lại lời” sau", action: nil, keyEquivalent: "")
+                w.isEnabled = false
+                menu.addItem(w)
+            }
         }
         if spotify.status == .denied {
             menu.addItem(ActionItem("Mở cài đặt quyền Automation…") {

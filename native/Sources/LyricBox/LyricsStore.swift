@@ -36,25 +36,36 @@ final class LyricsStore {
 
     /// Synced lyrics if any source has them, otherwise plain text (only synced lyrics are cached,
     /// so a song gets picked up again once LRCLIB gains timestamps for it).
-    func lyrics(for t: Track, refresh: Bool = false, completion: @escaping (String?) -> Void) {
-        if !refresh, let lrc = cache[key(t)] { return completion(lrc) }
+    /// `complete` is false when LRCLIB failed along the way (busy / offline), so a synced
+    /// version may still exist and it's worth asking again later.
+    func lyrics(for t: Track, refresh: Bool = false, completion: @escaping (_ lrc: String?, _ complete: Bool) -> Void) {
+        if !refresh, let lrc = cache[key(t)] { return completion(lrc, true) }
         Task {
-            let lrc = await Self.fetch(t)
+            let (lrc, complete) = await Self.fetch(t)
             await MainActor.run {
                 if let lrc, Self.isSynced(lrc) { self.set(t, lrc) }
-                completion(lrc)
+                completion(lrc, complete || (lrc.map(Self.isSynced) ?? false))
             }
         }
     }
 
-    private static func get(_ path: String, _ params: [String: String]) async -> Any? {
+    /// One LRCLIB request, retried when the server is busy (503 / 429) or the network fails.
+    /// Returns (json, ok); ok is false when every attempt failed.
+    private static func get(_ path: String, _ params: [String: String]) async -> (Any?, Bool) {
         var c = URLComponents(string: "https://lrclib.net/api/" + path)!
         c.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
         var req = URLRequest(url: c.url!, timeoutInterval: 10)
-        req.setValue("LyricBox/0.2 (macOS desktop lyric wallpaper)", forHTTPHeaderField: "User-Agent")
-        guard let (data, resp) = try? await URLSession.shared.data(for: req),
-              (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
-        return try? JSONSerialization.jsonObject(with: data)
+        req.setValue("LyricBox/0.3 (macOS desktop lyric wallpaper)", forHTTPHeaderField: "User-Agent")
+        for attempt in 0..<3 {
+            if attempt > 0 { try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000) }
+            guard let (data, resp) = try? await URLSession.shared.data(for: req),
+                  let code = (resp as? HTTPURLResponse)?.statusCode else { continue }
+            if code == 404 { return (nil, true) }          // simply not there
+            guard code == 200, let json = try? JSONSerialization.jsonObject(with: data) else { continue }
+            if let d = json as? [String: Any], d["statusCode"] != nil { continue }   // error body with 200
+            return (json, true)
+        }
+        return (nil, false)
     }
 
     /// Letters and digits only, no accents ("Lệ Quyên" → "lequyen").
@@ -71,14 +82,17 @@ final class LyricsStore {
         return abs((item["duration"] as? Double ?? 0) - duration) < 6
     }
 
-    private static func fetch(_ t: Track) async -> String? {
+    private static func fetch(_ t: Track) async -> (String?, Bool) {
+        var complete = true
         let artist = t.artist.components(separatedBy: CharacterSet(charactersIn: ",&")).first?
             .components(separatedBy: " feat").first?.trimmingCharacters(in: .whitespaces) ?? t.artist
         var params = ["track_name": t.name, "artist_name": artist, "duration": String(Int(t.duration.rounded()))]
         if !t.album.isEmpty { params["album_name"] = t.album }
         var plain: String?
-        if let exact = await get("get", params) as? [String: Any] {
-            if let lrc = exact["syncedLyrics"] as? String, !lrc.isEmpty { return lrc }
+        let (exactJSON, exactOK) = await get("get", params)
+        complete = complete && exactOK
+        if let exact = exactJSON as? [String: Any] {
+            if let lrc = exact["syncedLyrics"] as? String, !lrc.isEmpty { return (lrc, true) }
             plain = exact["plainLyrics"] as? String
         }
         // "Song - Remastered 2011", "Song (feat. X)"… often miss: search loosely
@@ -86,17 +100,19 @@ final class LyricsStore {
             of: #"\s*[-(\[].*(remaster|feat|ft\.|version|edit|live|mix).*$"#, with: "",
             options: [.regularExpression, .caseInsensitive]).trimmingCharacters(in: .whitespaces)
         for q in [["track_name": clean, "artist_name": artist], ["q": "\(artist) \(clean)"]] {
-            guard let items = await get("search", q) as? [[String: Any]] else { continue }
+            let (json, ok) = await get("search", q)
+            complete = complete && ok
+            guard let items = json as? [[String: Any]] else { continue }
             let matches = items.filter { same($0, clean, t.duration) }
                 .sorted { abs(($0["duration"] as? Double ?? 0) - t.duration) < abs(($1["duration"] as? Double ?? 0) - t.duration) }
             if let lrc = matches.lazy.compactMap({ $0["syncedLyrics"] as? String }).first(where: { !$0.isEmpty }) {
-                return lrc
+                return (lrc, true)
             }
             // remember plain text from the same song in case nothing synced turns up
             if plain == nil {
                 plain = matches.lazy.compactMap { $0["plainLyrics"] as? String }.first { !$0.isEmpty }
             }
         }
-        return plain.flatMap { $0.isEmpty ? nil : $0 }
+        return (plain.flatMap { $0.isEmpty ? nil : $0 }, complete)
     }
 }
