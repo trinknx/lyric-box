@@ -61,6 +61,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let store = LyricsStore()
     private var windows: [CGDirectDisplayID: WallpaperWindow] = [:]
     private let saver = SaverController()
+
+    // feeding the macOS screen saver (Lyric Box.saver) while it runs
+    private var saverHello = 0.0
+    private var lastStatePost = 0.0
+    private var saverListening: Bool { CACurrentMediaTime() - saverHello < 12 }
     private var statusItem: NSStatusItem!
     private var timer: Timer?
     private var pauseWork: DispatchWorkItem?
@@ -98,6 +103,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Fonts.register()
         Fonts.useNoto = settings.fontSet == .noto
         settings.onChange = { [weak self] k in self?.settingChanged(k) }
+        DistributedNotificationCenter.default().addObserver(forName: Bridge.hello, object: nil, queue: .main) { [weak self] _ in
+            guard let self else { return }
+            self.saverHello = CACurrentMediaTime()
+            self.postSaverState()
+            self.postSaverLyrics()
+        }
         syncWindows()
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged),
                                                name: NSApplication.didChangeScreenParametersNotification, object: nil)
@@ -155,9 +166,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let p = playing
         for s in scenes { s.tick(time: t, playing: p) }
         watchTap()
+        if saverListening && CACurrentMediaTime() - lastStatePost > 1 { postSaverState() }
         if preview == nil || saver.showing {
             saver.update(idleMinutes: settings.saverIdle, onlyWhilePlaying: settings.saverOnlyPlaying, playing: p)
         }
+    }
+
+    // MARK: macOS screen saver bridge
+
+    private func postSaverState() {
+        lastStatePost = CACurrentMediaTime()
+        let t = track
+        let st = Bridge.State(id: t?.id ?? "", name: t?.name ?? "", artist: t?.artist ?? "", album: t?.album ?? "",
+                              duration: t?.duration ?? 0, position: position, ts: Date().timeIntervalSince1970,
+                              playing: playing, theme: settings.theme.rawValue, mood: settings.mood.rawValue,
+                              fontSet: settings.fontSet.rawValue, beatSync: settings.beatSync.rawValue,
+                              strobe: settings.strobe, caption: settings.caption, offset: settings.offset)
+        Bridge.post(Bridge.state, Bridge.encode(st))
+    }
+
+    private func postSaverLyrics() {
+        guard saverListening, let l = lyrics else { return }
+        Bridge.post(Bridge.lyrics, Bridge.encode(Bridge.Lyrics(id: l.id, lrc: l.lrc)))
+    }
+
+    /// Copies Lyric Box.saver to ~/Library/Screen Savers and opens Screen Saver settings to pick it.
+    private func installScreenSaver() {
+        guard let src = Bundle.main.resourceURL?.appendingPathComponent("Lyric Box.saver"),
+              FileManager.default.fileExists(atPath: src.path) else { NSSound.beep(); return }
+        let dir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Screen Savers", isDirectory: true)
+        let dst = dir.appendingPathComponent("Lyric Box.saver")
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: dst.path) { try FileManager.default.removeItem(at: dst) }
+            try FileManager.default.copyItem(at: src, to: dst)
+        } catch {
+            NSApp.activate(ignoringOtherApps: true)
+            NSAlert(error: error).runModal()
+            return
+        }
+        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.ScreenSaver-Settings.extension")!)
     }
 
     // MARK: beat tap
@@ -195,6 +243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         t.onBeat = { [weak self] s in
             guard let self else { return }
             if self.debug { self.dlog(String(format: "beat %.2f  bpm %.0f", s, t.bpm)) }
+            if self.saverListening { Bridge.post(Bridge.beat, String(format: "%.2f", s)) }
             self.scenes.forEach { $0.beat(s) }
         }
         tapBox = t
@@ -283,6 +332,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func applyLyrics(_ lrc: String?, for t: Track) {
         lyrics = (t.id, lrc)
+        defer { postSaverLyrics() }
         lyricsStatus = lrc == nil ? "missing" : "found"
         scenes.forEach { $0.setLyrics(lrc, for: t.id, duration: t.duration) }
     }
@@ -452,6 +502,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             // a moment later, so the menu has closed
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.saver.show() }
         })
+        sv.addItem(.separator())
+        sv.addItem(ActionItem("Cài làm trình bảo vệ màn hình của Mac…") { [weak self] in self?.installScreenSaver() })
         menu.addItem(submenu("Bảo vệ màn hình", sv))
 
         let theme = NSMenu()

@@ -69,12 +69,12 @@ enum Fonts {
     private static var registered = false
 
     /// Registers the variable fonts shipped in Contents/Resources/Fonts (or native/Resources/Fonts when run from .build).
-    static func register() {
+    static func register(from bundle: Bundle = .main) {
         guard !registered else { return }
         registered = true
-        let exe = (Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath().deletingLastPathComponent()
+        let exe = (bundle.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])).resolvingSymlinksInPath().deletingLastPathComponent()
         // inside the .app; when run from .build, walk up to native/Resources/Fonts
-        var candidates = [Bundle.main.resourceURL?.appendingPathComponent("Fonts")]
+        var candidates = [bundle.resourceURL?.appendingPathComponent("Fonts")]
         var dir = exe
         for _ in 0..<5 {
             candidates.append(dir.appendingPathComponent("Resources/Fonts"))
