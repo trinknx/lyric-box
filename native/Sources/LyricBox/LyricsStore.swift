@@ -37,8 +37,11 @@ final class LyricsStore {
     /// Synced lyrics for a track, or nil (only lyrics with timestamps are used: they follow Spotify).
     /// `complete` is false when LRCLIB failed along the way (busy / offline), so a synced
     /// version may still exist and it's worth asking again later.
+    /// Debug: LYRICBOX_LRCLIB_FAIL=N makes the next N LRCLIB requests fail as if the server were busy.
+    nonisolated(unsafe) static var simulatedFailures = Int(ProcessInfo.processInfo.environment["LYRICBOX_LRCLIB_FAIL"] ?? "") ?? 0
+
     func lyrics(for t: Track, refresh: Bool = false, completion: @escaping (_ lrc: String?, _ complete: Bool) -> Void) {
-        if !refresh, let lrc = cache[key(t)] { return completion(lrc, true) }
+        if !refresh, Self.simulatedFailures == 0, let lrc = cache[key(t)] { return completion(lrc, true) }
         Task {
             let (lrc, complete) = await Self.fetch(t)
             await MainActor.run {
@@ -54,7 +57,11 @@ final class LyricsStore {
         var c = URLComponents(string: "https://lrclib.net/api/" + path)!
         c.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
         var req = URLRequest(url: c.url!, timeoutInterval: 10)
-        req.setValue("LyricBox/0.3 (macOS desktop lyric wallpaper)", forHTTPHeaderField: "User-Agent")
+        req.setValue("LyricBox/0.4 (macOS desktop lyric wallpaper)", forHTTPHeaderField: "User-Agent")
+        if simulatedFailures > 0 {
+            simulatedFailures -= 1
+            return (nil, false)
+        }
         for attempt in 0..<3 {
             if attempt > 0 { try? await Task.sleep(nanoseconds: UInt64(attempt) * 1_000_000_000) }
             guard let (data, resp) = try? await URLSession.shared.data(for: req),

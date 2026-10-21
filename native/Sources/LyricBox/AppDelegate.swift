@@ -147,6 +147,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         timer = t
 
         if let dir = ProcessInfo.processInfo.environment["LYRICBOX_SNAPSHOT"] { scheduleSnapshots(dir) }
+        // debug: LYRICBOX_TEST_SEARCH_AT=45 runs "Tìm lại lời bài này" after 45 s
+        if let s = ProcessInfo.processInfo.environment["LYRICBOX_TEST_SEARCH_AT"].flatMap(Double.init) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + s) { [weak self] in self?.searchLyricsAgain() }
+        }
         // debug: LYRICBOX_SAVER_NOW=1 opens the screen saver right away
         if ProcessInfo.processInfo.environment["LYRICBOX_SAVER_NOW"] != nil {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.saver.show() }
@@ -317,17 +321,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         store.lyrics(for: t, refresh: refresh) { [weak self] lrc, complete in
             guard let self, self.track?.id == t.id else { return }
             // keep showing what we had if a retry came back with less
-            if lrc == nil, self.lyrics?.id == t.id, self.lyrics?.lrc != nil {} else { self.applyLyrics(lrc, for: t) }
+            if lrc == nil, self.lyrics?.id == t.id, self.lyrics?.lrc != nil {
+                self.lyricsStatus = "found"
+            } else {
+                self.applyLyrics(lrc, for: t)
+            }
             self.lyricsIncomplete = !complete
+            self.dlog("lyrics \"\(t.name)\": found=\(lrc != nil) complete=\(complete) retries=\(self.lyricsRetries)")
             // LRCLIB was busy: a synced version may exist, ask again in a bit
             if !complete && self.lyricsRetries < 3 {
                 self.lyricsRetries += 1
                 DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
-                    guard let self, self.track?.id == t.id else { return }
+                    // skip if the song changed or lyrics arrived meanwhile (e.g. via "Tìm lại lời")
+                    guard let self, self.track?.id == t.id, self.lyricsIncomplete else { return }
+                    self.dlog("lyrics: automatic retry \(self.lyricsRetries)")
                     self.loadLyrics(t, refresh: true)
                 }
             }
         }
+    }
+
+    /// "Tìm lại lời bài này": ask LRCLIB again now, ignoring the cache; automatic retries start over.
+    private func searchLyricsAgain() {
+        guard let t = track else { return }
+        lyricsRetries = 0
+        lyricsStatus = "loading"
+        dlog("lyrics: search again (button)")
+        loadLyrics(t, refresh: true)
     }
 
     private func applyLyrics(_ lrc: String?, for t: Track) {
@@ -534,9 +554,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         menu.addItem(.separator())
         let has = track != nil
-        menu.addItem(ActionItem("Tìm lại lời bài này", enabled: has) { [weak self] in
-            if let self, let t = self.track { self.loadLyrics(t, refresh: true) }
-        })
+        menu.addItem(ActionItem("Tìm lại lời bài này", enabled: has) { [weak self] in self?.searchLyricsAgain() })
         menu.addItem(.separator())
         let login = SMAppService.mainApp
         menu.addItem(ActionItem("Mở cùng macOS", checked: login.status == .enabled) {
