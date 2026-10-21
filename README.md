@@ -79,19 +79,20 @@ native/Saver/           the macOS screen saver bundle (LyricBoxSaverView, same e
 
 ## Menu bar menu
 
-The app's menus are in Vietnamese; the original labels are shown in brackets.
-
-- **Show lyrics on the desktop** (*Hiện lời trên màn hình nền*): on/off
-- **Text style** (*Kiểu chữ*): COTODAMA automatic per song / calm / medium / energetic / constellation (*Chòm sao*) / rap / glitch
-- **Font** (*Phông chữ*): Noto Serif / Sans (as COTODAMA uses for Latin and Vietnamese) or the system fonts
-- **Follow the beat** (*Theo nhịp nhạc*): off / soft (text and glow pulse on the beat) / strong (plus the line bouncing); optional flash on strong beats of energetic songs; shows the detected BPM
-- **Background** (*Nền*): Dark · Light (clear acrylic) · Transparent with white text · Transparent with black text (keeps your own wallpaper)
-- **Screen** (*Màn hình*): main screen, a specific screen, or all screens
-- **Lyric offset** (*Lệch lời*): `⌥⌘]` earlier · `⌥⌘[` later (0.25 s per step)
-- **Search lyrics again** (*Tìm lại lời bài này*) when the lyrics were wrong or LRCLIB was busy
-- **Screen saver** (*Bảo vệ màn hình*): off / after 2, 5 or 10 minutes without input; *only while Spotify plays* (on by default); *preview now*. The lyrics then cover every screen in front of all windows; moving the mouse or pressing a key brings the desktop back (the key isn't passed to the app underneath). While it shows and music plays, the display is kept awake. Transparent backgrounds switch to the dark one here.
-  - **Install as the Mac's screen saver** (*Cài làm trình bảo vệ màn hình của Mac…*): copies `Lyric Box.saver` to `~/Library/Screen Savers` and opens Screen Saver settings; pick **Lyric Box** there. The lyrics then also show when macOS's own screen saver starts, including while the Mac is locked (apps can't draw on the unlock screen itself, but the screen saver keeps running while locked). Keep the Lyric Box app running: it feeds the saver what's playing.
-- **Open at login** (*Mở cùng macOS*)
+- **Show Lyrics on Desktop**: on/off
+- **Style**: Automatic (per song) / Calm / Medium / Energetic / Constellation (3D) / Rap / Glitch
+- **Font**: Noto Serif / Sans (what COTODAMA uses for Latin and Vietnamese) or the system fonts
+- **Beat Sync**: Off / Soft (text and glow pulse on the beat) / Strong (the line also bounces); optional *Flash on Strong Beats* for energetic songs; shows the detected BPM
+- **Screen Saver**:
+  - Lyric Box's own mode: Off / after 2, 5 or 10 minutes idle, *Only While Spotify Plays* (on by default), *Preview Now*. The lyrics cover every screen in front of all windows; moving the mouse or pressing a key brings the desktop back (the key isn't passed to the app underneath). The display is kept awake while it shows and music plays. Transparent backgrounds switch to the dark one here.
+  - **Install as Mac Screen Saver…**: copies `Lyric Box.saver` to `~/Library/Screen Savers` and opens Screen Saver settings; pick **Lyric Box** there. The lyrics then also show when macOS's own screen saver runs, including while the Mac is locked. Keep the Lyric Box app running: it feeds the saver what's playing. Run it again after updating the app.
+  - **Start Screen Saver When Mac Locks** (on by default, needs the Mac screen saver installed): when you lock the Mac (`⌃⌘Q`) while Spotify plays, the screen saver starts right away instead of after macOS's idle timeout, so the lyrics keep going on the locked screen. Apps can't draw on the unlock prompt itself.
+- **Background**: Dark · Light (clear acrylic) · Transparent — white text · Transparent — black text (the transparent ones keep your own wallpaper)
+- **Display**: Main Display, a specific display, or All Displays
+- **Show Song Title**
+- **Lyrics Offset**: `⌥⌘]` earlier · `⌥⌘[` later (0.25 s per step)
+- **Search Lyrics Again**: when the lyrics were wrong or LRCLIB was busy (busy lookups are also retried automatically every 30 s, up to 3 times)
+- **Open at Login**
 
 ## Effects (COTODAMA-style)
 
@@ -99,7 +100,7 @@ The app's menus are in Vietnamese; the original labels are shown in brackets.
 - **Continuous canvas:** the previous line stays, dimmed; the camera pans, zooms and **turns 90°** to the new line.
 - Upcoming words sometimes appear faintly first, and short phrases sometimes sit in an inverted label box.
 - Mood from how fast the words come: calm (thin serif, slow) · medium · energetic (bold uppercase, fast).
-- **Constellation** (*Chòm sao*), in 3D: every word is a star at its own depth, so near words look bigger. The line's stars first show faintly so you see the shape; as each word is sung its star lights up, a line grows to it through 3D space from the previous star, and the letters are spelled out beside it. The whole sky slowly sways as if dragged by a finger, so near words move more than far ones (parallax), while every word keeps facing you. New constellations come out of the distance; older ones recede and dim. In automatic mode about half of the calm songs use it.
+- **Constellation**, in 3D: every word is a star at its own depth, so near words look bigger. The line's stars first show faintly so you see the shape; as each word is sung its star lights up, a line grows to it through 3D space from the previous star, and the letters are spelled out beside it. The whole sky slowly sways as if dragged by a finger, so near words move more than far ones (parallax), while every word keeps facing you. New constellations come out of the distance; older ones recede and dim. In automatic mode about half of the calm songs use it.
 - Songs without lyrics: a typographic "poster" of title → artist → album (changing every 8 s) over moving graphics (rings, waves, dot grid, sunburst; one per song). Instrumental breaks in songs with lyrics show these graphics too.
 
 - **Rap:** one huge word at a time in the middle, punching in as it's sung while the previous one zooms past, with the whole line in small type underneath. Automatic mode uses it when the singing is very dense.

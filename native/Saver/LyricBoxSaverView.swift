@@ -73,7 +73,7 @@ final class LyricBoxSaverView: ScreenSaverView {
         guard let scene else { return }
         idle = true
         idleStart = CACurrentMediaTime()
-        let hint = Track(id: "lyricbox-hint", name: "Lyric Box", artist: "Mở app Lyric Box và phát nhạc trên Spotify", album: "", duration: 0)
+        let hint = Track(id: "lyricbox-hint", name: "Lyric Box", artist: "Open the Lyric Box app and play music in Spotify", album: "", duration: 0)
         scene.moodSetting = .calm
         scene.setTrack(hint)
         scene.setLyrics(nil, for: hint.id, duration: 0)

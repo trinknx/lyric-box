@@ -79,17 +79,22 @@ native/Saver/           trình bảo vệ màn hình của macOS (LyricBoxSaverV
 
 ## Menu trên thanh menu
 
-- **Hiện lời trên màn hình nền**: bật/tắt
-- **Kiểu chữ**: COTODAMA tự động theo bài / êm dịu / vừa / sôi động / chòm sao / rap / glitch
-- **Phông chữ**: Noto Serif / Sans (giống COTODAMA dùng cho chữ Latin và tiếng Việt) hoặc phông hệ thống
-- **Theo nhịp nhạc**: tắt / nhẹ (chữ và nền đập theo nhịp) / mạnh (thêm dòng chữ nảy); tùy chọn nháy sáng ở nhịp mạnh của bài sôi động; hiện BPM đo được
-- **Nền**: Tối · Sáng (acrylic trong) · Trong suốt chữ trắng · Trong suốt chữ đen (giữ hình nền của bạn)
-- **Màn hình**: màn hình chính, chọn màn hình, hoặc tất cả
-- **Lệch lời**: `⌥⌘]` lời sớm hơn · `⌥⌘[` lời trễ hơn (0.25s mỗi lần)
-- **Tìm lại lời** khi lời bị sai hoặc LRCLIB đang quá tải
-- **Bảo vệ màn hình**: tắt / sau 2, 5 hoặc 10 phút không dùng máy; *chỉ khi Spotify đang phát* (mặc định bật); *xem thử ngay*. Lời sẽ phủ mọi màn hình, nằm trên tất cả cửa sổ; di chuột hoặc bấm phím là trở lại (phím không bị gõ vào ứng dụng bên dưới). Trong lúc hiện và đang phát nhạc, màn hình được giữ sáng. Nền trong suốt sẽ chuyển sang nền tối ở chế độ này.
-  - **Cài làm trình bảo vệ màn hình của Mac…**: chép `Lyric Box.saver` vào `~/Library/Screen Savers` và mở cài đặt Screen Saver; chọn **Lyric Box** ở đó. Lời sẽ hiện cả khi macOS tự bật trình bảo vệ màn hình, kể cả khi máy đang khóa (ứng dụng không vẽ được lên màn hình nhập mật khẩu, nhưng trình bảo vệ màn hình vẫn chạy khi khóa). Cần để app Lyric Box chạy: app gửi bài đang phát cho trình bảo vệ màn hình.
-- **Mở cùng macOS**
+Menu của app bằng tiếng Anh:
+
+- **Show Lyrics on Desktop**: bật/tắt lời trên màn hình nền
+- **Style** (kiểu chữ): Automatic (tự động theo bài) / Calm (êm dịu) / Medium (vừa) / Energetic (sôi động) / Constellation (chòm sao 3D) / Rap / Glitch
+- **Font**: Noto Serif / Sans (giống COTODAMA dùng cho chữ Latin và tiếng Việt) hoặc phông hệ thống
+- **Beat Sync** (theo nhịp nhạc): Off / Soft (chữ và nền đập theo nhịp) / Strong (thêm dòng chữ nảy); tùy chọn *Flash on Strong Beats* (nháy sáng ở nhịp mạnh của bài sôi động); hiện BPM đo được
+- **Screen Saver** (bảo vệ màn hình):
+  - Chế độ riêng của Lyric Box: Off / sau 2, 5 hoặc 10 phút không dùng máy, *Only While Spotify Plays* (chỉ khi Spotify đang phát, mặc định bật), *Preview Now* (xem thử). Lời phủ mọi màn hình, nằm trên tất cả cửa sổ; di chuột hoặc bấm phím là trở lại (phím không bị gõ vào ứng dụng bên dưới). Màn hình được giữ sáng khi đang hiện và đang phát nhạc. Nền trong suốt chuyển sang nền tối ở chế độ này.
+  - **Install as Mac Screen Saver…**: chép `Lyric Box.saver` vào `~/Library/Screen Savers` và mở cài đặt Screen Saver; chọn **Lyric Box** ở đó. Lời sẽ hiện cả khi macOS chạy trình bảo vệ màn hình, kể cả khi máy đang khóa. Cần để app Lyric Box chạy (app gửi bài đang phát cho trình bảo vệ màn hình). Làm lại sau mỗi lần cập nhật app.
+  - **Start Screen Saver When Mac Locks** (mặc định bật, cần cài trình bảo vệ màn hình ở trên): khi khóa máy (`⌃⌘Q`) lúc Spotify đang phát, trình bảo vệ màn hình bật ngay thay vì chờ hết thời gian chờ của macOS, nên lời vẫn chạy trên màn hình khóa. Ứng dụng không vẽ được lên ô nhập mật khẩu.
+- **Background** (nền): Dark · Light (acrylic trong) · Transparent — white text · Transparent — black text (hai kiểu trong suốt giữ hình nền của bạn)
+- **Display** (màn hình): Main Display, chọn một màn hình, hoặc All Displays
+- **Show Song Title**: hiện tên bài
+- **Lyrics Offset** (lệch lời): `⌥⌘]` sớm hơn · `⌥⌘[` trễ hơn (0.25s mỗi lần)
+- **Search Lyrics Again**: tìm lại lời khi lời sai hoặc LRCLIB quá tải (khi quá tải app cũng tự tìm lại mỗi 30 giây, tối đa 3 lần)
+- **Open at Login**: mở cùng macOS
 
 ## Hiệu ứng (mô phỏng COTODAMA)
 

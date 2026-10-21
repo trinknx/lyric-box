@@ -103,6 +103,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         Fonts.register()
         Fonts.useNoto = settings.fontSet == .noto
         settings.onChange = { [weak self] k in self?.settingChanged(k) }
+        // When the Mac locks, macOS only starts the screen saver after its idle timeout; start it now
+        DistributedNotificationCenter.default().addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
+            self?.screenLocked()
+        }
         DistributedNotificationCenter.default().addObserver(forName: Bridge.hello, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             self.saverHello = CACurrentMediaTime()
@@ -147,7 +151,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         timer = t
 
         if let dir = ProcessInfo.processInfo.environment["LYRICBOX_SNAPSHOT"] { scheduleSnapshots(dir) }
-        // debug: LYRICBOX_TEST_SEARCH_AT=45 runs "Tìm lại lời bài này" after 45 s
+        // debug: LYRICBOX_TEST_SEARCH_AT=45 runs "Search Lyrics Again" after 45 s
         if let s = ProcessInfo.processInfo.environment["LYRICBOX_TEST_SEARCH_AT"].flatMap(Double.init) {
             DispatchQueue.main.asyncAfter(deadline: .now() + s) { [weak self] in self?.searchLyricsAgain() }
         }
@@ -192,6 +196,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func postSaverLyrics() {
         guard saverListening, let l = lyrics else { return }
         Bridge.post(Bridge.lyrics, Bridge.encode(Bridge.Lyrics(id: l.id, lrc: l.lrc)))
+    }
+
+    private var installedSaver: URL {
+        FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Screen Savers/Lyric Box.saver")
+    }
+    private var saverInstalled: Bool { FileManager.default.fileExists(atPath: installedSaver.path) }
+
+    private func screenLocked() {
+        dlog("screen locked")
+        guard settings.saverOnLock, saverInstalled, !settings.saverOnlyPlaying || playing else { return }
+        saver.hide()   // our own windows are hidden by the lock screen anyway
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            let engine = URL(fileURLWithPath: "/System/Library/CoreServices/ScreenSaverEngine.app")
+            NSWorkspace.shared.openApplication(at: engine, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+                if let error { self.dlog("screen saver start failed: \(error.localizedDescription)") }
+            }
+        }
     }
 
     /// Copies Lyric Box.saver to ~/Library/Screen Savers and opens Screen Saver settings to pick it.
@@ -283,11 +304,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func beatStatus() -> String {
-        guard #available(macOS 14.2, *) else { return "Cần macOS 14.2 trở lên" }
-        if settings.beatSync == .off { return "Đang tắt" }
-        guard let t = tap, t.running else { return playing ? "Chưa nghe được Spotify" : "Chờ Spotify phát nhạc" }
-        if Date().timeIntervalSince(t.lastAudio) > 6 { return "⚠︎ Không nhận được âm thanh — kiểm tra quyền" }
-        return t.bpm > 0 ? String(format: "♩ %.0f BPM", t.bpm) : "Đang nghe nhịp…"
+        guard #available(macOS 14.2, *) else { return "Needs macOS 14.2 or later" }
+        if settings.beatSync == .off { return "Off" }
+        guard let t = tap, t.running else { return playing ? "Can't hear Spotify yet" : "Waiting for Spotify to play" }
+        if Date().timeIntervalSince(t.lastAudio) > 6 { return "⚠︎ No audio — check the permission" }
+        return t.bpm > 0 ? String(format: "♩ %.0f BPM", t.bpm) : "Listening for the beat…"
     }
 
     private func stateChanged() {
@@ -332,7 +353,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if !complete && self.lyricsRetries < 3 {
                 self.lyricsRetries += 1
                 DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
-                    // skip if the song changed or lyrics arrived meanwhile (e.g. via "Tìm lại lời")
+                    // skip if the song changed or lyrics arrived meanwhile (e.g. via "Search Lyrics Again")
                     guard let self, self.track?.id == t.id, self.lyricsIncomplete else { return }
                     self.dlog("lyrics: automatic retry \(self.lyricsRetries)")
                     self.loadLyrics(t, refresh: true)
@@ -341,7 +362,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
-    /// "Tìm lại lời bài này": ask LRCLIB again now, ignoring the cache; automatic retries start over.
+    /// "Search Lyrics Again": ask LRCLIB again now, ignoring the cache; automatic retries start over.
     private func searchLyricsAgain() {
         guard let t = track else { return }
         lyricsRetries = 0
@@ -448,12 +469,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func statusText() -> String {
         if preview != nil { return "▶︎ Preview" }
         switch spotify.status {
-        case .denied: return "⚠︎ Chưa được phép đọc Spotify"
-        case .notInstalled: return "Chưa cài app Spotify"
-        case .notRunning: return "Spotify chưa mở"
-        case .idle: return "Spotify chưa phát nhạc"
+        case .denied: return "⚠︎ Not allowed to read Spotify"
+        case .notInstalled: return "Spotify app not installed"
+        case .notRunning: return "Spotify isn't open"
+        case .idle: return "Spotify isn't playing"
         case .ok:
-            guard let t = spotify.track else { return "Spotify chưa phát nhạc" }
+            guard let t = spotify.track else { return "Spotify isn't playing" }
             var s = "\(t.name) — \(t.artist)"
             if s.count > 48 { s = String(s.prefix(47)) + "…" }
             return (spotify.playing ? "▶︎ " : "❚❚ ") + s
@@ -465,37 +486,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let info = NSMenuItem(title: statusText(), action: nil, keyEquivalent: "")
         info.isEnabled = false
         menu.addItem(info)
-        if track != nil, let text = ["loading": "Đang tìm lời…", "found": "Đã có lời đồng bộ",
-                                     "missing": "Chưa có lời đồng bộ cho bài này"][lyricsStatus] {
+        if track != nil, let text = ["loading": "Searching for lyrics…", "found": "Synced lyrics found",
+                                     "missing": "No synced lyrics for this song"][lyricsStatus] {
             let l = NSMenuItem(title: text, action: nil, keyEquivalent: "")
             l.isEnabled = false
             menu.addItem(l)
             if lyricsIncomplete && lyricsStatus != "found" {
-                let w = NSMenuItem(title: lyricsRetries < 3 ? "LRCLIB đang quá tải — sẽ tự tìm lại" : "LRCLIB đang quá tải — thử “Tìm lại lời” sau", action: nil, keyEquivalent: "")
+                let w = NSMenuItem(title: lyricsRetries < 3 ? "LRCLIB is busy — will retry automatically" : "LRCLIB is busy — try “Search Lyrics Again” later", action: nil, keyEquivalent: "")
                 w.isEnabled = false
                 menu.addItem(w)
             }
         }
         if spotify.status == .denied {
-            menu.addItem(ActionItem("Mở cài đặt quyền Automation…") {
+            menu.addItem(ActionItem("Open Automation Settings…") {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation")!)
             })
         }
         menu.addItem(.separator())
-        menu.addItem(ActionItem("Hiện lời trên màn hình nền", checked: settings.enabled) { [weak self] in self?.settings.enabled.toggle() })
+        menu.addItem(ActionItem("Show Lyrics on Desktop", checked: settings.enabled) { [weak self] in self?.settings.enabled.toggle() })
         menu.addItem(.separator())
 
         let mood = NSMenu()
         for m in MoodSetting.allCases {
             mood.addItem(ActionItem(m.title, checked: settings.mood == m) { [weak self] in self?.settings.mood = m })
         }
-        menu.addItem(submenu("Kiểu chữ", mood))
+        menu.addItem(submenu("Style", mood))
 
         let fonts = NSMenu()
         for f in FontSet.allCases {
             fonts.addItem(ActionItem(f.title, checked: settings.fontSet == f) { [weak self] in self?.settings.fontSet = f })
         }
-        menu.addItem(submenu("Phông chữ", fonts))
+        menu.addItem(submenu("Font", fonts))
 
         let beat = NSMenu()
         let st = NSMenuItem(title: beatStatus(), action: nil, keyEquivalent: "")
@@ -506,61 +527,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             beat.addItem(ActionItem(b.title, checked: settings.beatSync == b) { [weak self] in self?.settings.beatSync = b })
         }
         beat.addItem(.separator())
-        beat.addItem(ActionItem("Nháy sáng theo nhịp (bài sôi động)", checked: settings.strobe) { [weak self] in self?.settings.strobe.toggle() })
-        beat.addItem(ActionItem("Mở cài đặt quyền âm thanh…") {
+        beat.addItem(ActionItem("Flash on Strong Beats (energetic songs)", checked: settings.strobe) { [weak self] in self?.settings.strobe.toggle() })
+        beat.addItem(ActionItem("Open Audio Permission Settings…") {
             NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AudioCapture")!)
         })
-        menu.addItem(submenu("Theo nhịp nhạc", beat))
+        menu.addItem(submenu("Beat Sync", beat))
 
         let sv = NSMenu()
-        for (title, minutes) in [("Tắt", 0), ("Sau 2 phút không dùng máy", 2), ("Sau 5 phút không dùng máy", 5), ("Sau 10 phút không dùng máy", 10)] {
+        for (title, minutes) in [("Off", 0), ("After 2 Minutes Idle", 2), ("After 5 Minutes Idle", 5), ("After 10 Minutes Idle", 10)] {
             sv.addItem(ActionItem(title, checked: settings.saverIdle == minutes) { [weak self] in self?.settings.saverIdle = minutes })
         }
         sv.addItem(.separator())
-        sv.addItem(ActionItem("Chỉ khi Spotify đang phát", checked: settings.saverOnlyPlaying) { [weak self] in self?.settings.saverOnlyPlaying.toggle() })
-        sv.addItem(ActionItem("Xem thử ngay") { [weak self] in
+        sv.addItem(ActionItem("Only While Spotify Plays", checked: settings.saverOnlyPlaying) { [weak self] in self?.settings.saverOnlyPlaying.toggle() })
+        sv.addItem(ActionItem("Preview Now") { [weak self] in
             // a moment later, so the menu has closed
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self?.saver.show() }
         })
         sv.addItem(.separator())
-        sv.addItem(ActionItem("Cài làm trình bảo vệ màn hình của Mac…") { [weak self] in self?.installScreenSaver() })
-        menu.addItem(submenu("Bảo vệ màn hình", sv))
+        sv.addItem(ActionItem(saverInstalled ? "Reinstall Mac Screen Saver…" : "Install as Mac Screen Saver…") { [weak self] in
+            self?.installScreenSaver()
+        })
+        sv.addItem(ActionItem("Start Screen Saver When Mac Locks", checked: settings.saverOnLock, enabled: saverInstalled) { [weak self] in
+            self?.settings.saverOnLock.toggle()
+        })
+        if !saverInstalled {
+            let note = NSMenuItem(title: "Install the Mac screen saver to see lyrics while locked", action: nil, keyEquivalent: "")
+            note.isEnabled = false
+            sv.addItem(note)
+        }
+        menu.addItem(submenu("Screen Saver", sv))
 
         let theme = NSMenu()
         for t in Theme.allCases {
             theme.addItem(ActionItem(t.title, checked: settings.theme == t) { [weak self] in self?.settings.theme = t })
         }
-        menu.addItem(submenu("Nền", theme))
+        menu.addItem(submenu("Background", theme))
 
         let disp = NSMenu()
-        disp.addItem(ActionItem("Màn hình chính", checked: settings.display == "primary") { [weak self] in self?.settings.display = "primary" })
+        disp.addItem(ActionItem("Main Display", checked: settings.display == "primary") { [weak self] in self?.settings.display = "primary" })
         let screens = NSScreen.screens
         if screens.count > 1 {
             for (i, s) in screens.enumerated() {
                 let id = String(s.displayID)
-                let name = "Màn hình \(i + 1) (\(Int(s.frame.width))×\(Int(s.frame.height)))\(i == 0 ? " — chính" : "")"
+                let name = "Display \(i + 1) (\(Int(s.frame.width))×\(Int(s.frame.height)))\(i == 0 ? " — main" : "")"
                 disp.addItem(ActionItem(name, checked: settings.display == id) { [weak self] in self?.settings.display = id })
             }
-            disp.addItem(ActionItem("Tất cả màn hình", checked: settings.display == "all") { [weak self] in self?.settings.display = "all" })
+            disp.addItem(ActionItem("All Displays", checked: settings.display == "all") { [weak self] in self?.settings.display = "all" })
         }
-        menu.addItem(submenu("Màn hình", disp))
-        menu.addItem(ActionItem("Hiện tên bài", checked: settings.caption) { [weak self] in self?.settings.caption.toggle() })
+        menu.addItem(submenu("Display", disp))
+        menu.addItem(ActionItem("Show Song Title", checked: settings.caption) { [weak self] in self?.settings.caption.toggle() })
 
         let off = NSMenu()
-        off.addItem(ActionItem("Lời hiện sớm hơn 0.25s   ⌥⌘]") { [weak self] in self?.settings.offset += 0.25 })
-        off.addItem(ActionItem("Lời hiện trễ hơn 0.25s   ⌥⌘[") { [weak self] in self?.settings.offset -= 0.25 })
-        off.addItem(ActionItem("Đặt lại") { [weak self] in self?.settings.offset = 0 })
-        menu.addItem(submenu(String(format: "Lệch lời (%@%.2fs)", settings.offset > 0 ? "+" : "", settings.offset), off))
+        off.addItem(ActionItem("Lyrics 0.25 s Earlier   ⌥⌘]") { [weak self] in self?.settings.offset += 0.25 })
+        off.addItem(ActionItem("Lyrics 0.25 s Later   ⌥⌘[") { [weak self] in self?.settings.offset -= 0.25 })
+        off.addItem(ActionItem("Reset") { [weak self] in self?.settings.offset = 0 })
+        menu.addItem(submenu(String(format: "Lyrics Offset (%@%.2f s)", settings.offset > 0 ? "+" : "", settings.offset), off))
 
         menu.addItem(.separator())
         let has = track != nil
-        menu.addItem(ActionItem("Tìm lại lời bài này", enabled: has) { [weak self] in self?.searchLyricsAgain() })
+        menu.addItem(ActionItem("Search Lyrics Again", enabled: has) { [weak self] in self?.searchLyricsAgain() })
         menu.addItem(.separator())
         let login = SMAppService.mainApp
-        menu.addItem(ActionItem("Mở cùng macOS", checked: login.status == .enabled) {
+        menu.addItem(ActionItem("Open at Login", checked: login.status == .enabled) {
             if login.status == .enabled { try? login.unregister() } else { try? login.register() }
         })
-        menu.addItem(ActionItem("Thoát Lyric Box") { NSApp.terminate(nil) })
+        menu.addItem(ActionItem("Quit Lyric Box") { NSApp.terminate(nil) })
     }
 
     private func submenu(_ title: String, _ sub: NSMenu) -> NSMenuItem {

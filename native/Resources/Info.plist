@@ -14,7 +14,7 @@
     <key>ATSApplicationFontsPath</key><string>Fonts</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.music</string>
     <key>NSHighResolutionCapable</key><true/>
-    <key>NSAudioCaptureUsageDescription</key><string>Lyric Box nghe âm thanh của Spotify để làm chữ đập theo nhịp nhạc. Âm thanh không được ghi lại hay gửi đi đâu.</string>
-    <key>NSAppleEventsUsageDescription</key><string>Lyric Box đọc bài đang phát trong Spotify để hiển thị lời đồng bộ.</string>
+    <key>NSAudioCaptureUsageDescription</key><string>Lyric Box listens to Spotify’s audio to make the lyrics move with the beat. The audio is never recorded or sent anywhere.</string>
+    <key>NSAppleEventsUsageDescription</key><string>Lyric Box reads what’s playing in Spotify to show synced lyrics.</string>
 </dict>
 </plist>

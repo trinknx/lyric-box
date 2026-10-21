@@ -45,10 +45,10 @@ enum Theme: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .night: return "Tối"
-        case .clear: return "Sáng (acrylic trong)"
-        case .glassLight: return "Trong suốt — chữ trắng"
-        case .glassDark: return "Trong suốt — chữ đen"
+        case .night: return "Dark"
+        case .clear: return "Light (clear acrylic)"
+        case .glassLight: return "Transparent — white text"
+        case .glassDark: return "Transparent — black text"
         }
     }
 }
@@ -58,13 +58,13 @@ enum MoodSetting: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .auto: return "Tự động theo bài"
-        case .calm: return "Êm dịu"
-        case .mid: return "Vừa"
-        case .energetic: return "Sôi động"
-        case .constellation: return "Chòm sao (nối chữ như sao)"
-        case .rap: return "Rap — từng chữ phóng to"
-        case .glitch: return "Glitch — nhiễu, giật (rock / điện tử)"
+        case .auto: return "Automatic (per song)"
+        case .calm: return "Calm"
+        case .mid: return "Medium"
+        case .energetic: return "Energetic"
+        case .constellation: return "Constellation (3D)"
+        case .rap: return "Rap — one word at a time"
+        case .glitch: return "Glitch (rock / electronic)"
         }
     }
 }
@@ -74,9 +74,9 @@ enum BeatSync: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .off: return "Tắt"
-        case .soft: return "Nhẹ — chữ và nền đập theo nhịp"
-        case .strong: return "Mạnh — thêm chữ nảy theo nhịp"
+        case .off: return "Off"
+        case .soft: return "Soft — text and glow pulse"
+        case .strong: return "Strong — the line also bounces"
         }
     }
 }
@@ -86,8 +86,8 @@ enum FontSet: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .noto: return "Noto Serif / Sans (giống COTODAMA)"
-        case .system: return "Hệ thống (New York / SF)"
+        case .noto: return "Noto Serif / Sans (as COTODAMA)"
+        case .system: return "System (New York / SF)"
         }
     }
 }
@@ -140,6 +140,11 @@ final class Settings {
     var saverOnlyPlaying: Bool {
         get { d.object(forKey: "saverOnlyPlaying") as? Bool ?? true }
         set { set(newValue, "saverOnlyPlaying") }
+    }
+    /// Start the macOS screen saver as soon as the Mac locks, so the lyrics show right away.
+    var saverOnLock: Bool {
+        get { d.object(forKey: "saverOnLock") as? Bool ?? true }
+        set { set(newValue, "saverOnLock") }
     }
     var caption: Bool {
         get { d.object(forKey: "caption") as? Bool ?? true }
